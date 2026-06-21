@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: cafeflow-db
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    restart: unless-stopped
+    networks:
+      - cafeflow-network
+
+  backend:
+    build: ./backend
+    container_name: cafeflow-backend
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - MONGO_URI=mongodb://mongodb:27017/cafeflow
+      - JWT_SECRET=supersecretcafeflowjwttokenkey12345!
+      - FRONTEND_URL=http://localhost:3000
+    depends_on:
+      - mongodb
+    restart: unless-stopped
+    networks:
+      - cafeflow-network
+
+  frontend:
+    build: ./frontend
+    container_name: cafeflow-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:5000
+      - NEXT_PUBLIC_SOCKET_URL=http://localhost:5000
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - cafeflow-network
+
+volumes:
+  mongo-data:
+
+networks:
+  cafeflow-network:
+    driver: bridge

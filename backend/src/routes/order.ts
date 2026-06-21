@@ -1,0 +1,252 @@
+import { Router, Response } from 'express';
+import Order from '../models/Order';
+import Dish from '../models/Dish';
+import Restaurant from '../models/Restaurant';
+import Otp from '../models/Otp';
+import Bill from '../models/Bill';
+import { generateBillPDF } from '../utils/pdf';
+import { protect, restrictTo, AuthRequest } from '../middleware/auth';
+
+const router = Router();
+
+/**
+ * Helper to generate a unique invoice code
+ */
+const generateBillNumber = (): string => {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  return `INV-${year}${month}${day}-${rand}`;
+};
+
+/**
+ * @route   POST /api/orders
+ * @desc    Place an order after customer phone verification
+ * @access  Public
+ */
+router.post('/', async (req, res) => {
+  try {
+    const { restaurantId, customerName, phoneNumber, tableNumber, items } = req.body;
+
+    if (!restaurantId || !customerName || !phoneNumber || !tableNumber || !items || !items.length) {
+      return res.status(400).json({ success: false, message: 'All order details are required.' });
+    }
+
+    // 1. Verify OTP Status: Ensure verification occurred
+    const verifiedOtp = await Otp.findOne({ phoneNumber: phoneNumber.trim(), verified: true });
+    if (!verifiedOtp) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone number verification is required before placing an order.',
+      });
+    }
+
+    // 2. Fetch Restaurant configurations
+    const restaurant = await Restaurant.findById(restaurantId);
+    if (!restaurant) {
+      return res.status(404).json({ success: false, message: 'Restaurant not found.' });
+    }
+
+    // 3. Compute costs securely from Database pricing to avoid client-side tampering
+    let subtotal = 0;
+    const validatedItems = [];
+
+    for (const item of items) {
+      const dish = await Dish.findById(item.dishId);
+      if (!dish) {
+        return res.status(404).json({ success: false, message: `Dish item ${item.name} not found.` });
+      }
+
+      if (!dish.available) {
+        return res.status(400).json({ success: false, message: `Dish "${dish.name}" is currently out of stock.` });
+      }
+
+      // Base price
+      let itemPrice = dish.price;
+      const itemCustomizations = [];
+
+      // Calculate customization extra costs
+      if (item.customizations && item.customizations.length > 0) {
+        for (const selectedCust of item.customizations) {
+          // Check if customization group exists in DB
+          const dbCustGroup = dish.customizations.find(g => g.name === selectedCust.name);
+          if (dbCustGroup) {
+            const dbOption = dbCustGroup.options.find(o => o.name === selectedCust.selectedOption);
+            if (dbOption) {
+              itemCustomizations.push({
+                name: selectedCust.name,
+                selectedOption: selectedCust.selectedOption,
+                extraPrice: dbOption.extraPrice,
+              });
+              itemPrice += dbOption.extraPrice;
+            }
+          }
+        }
+      }
+
+      const itemTotal = itemPrice * item.quantity;
+      subtotal += itemTotal;
+
+      validatedItems.push({
+        dishId: dish._id,
+        name: dish.name,
+        price: dish.price, // Store base price
+        quantity: item.quantity,
+        customizations: itemCustomizations,
+        specialInstructions: item.specialInstructions || '',
+      });
+    }
+
+    // Calculate tax using restaurant tax rate
+    const taxRate = restaurant.taxRate || 5;
+    const tax = Number(((subtotal * taxRate) / 100).toFixed(2));
+    const totalAmount = Number((subtotal + tax).toFixed(2));
+
+    // 4. Save order to database
+    const order = new Order({
+      restaurantId,
+      customerName,
+      phoneNumber: phoneNumber.trim(),
+      tableNumber,
+      items: validatedItems,
+      status: 'received',
+      subtotal,
+      tax,
+      totalAmount,
+    });
+    await order.save();
+
+    // 5. Consume/delete OTP token to prevent reuse
+    await Otp.deleteOne({ phoneNumber: phoneNumber.trim() });
+
+    // 6. Broadcast via Socket.io
+    const io = req.app.get('io');
+    if (io) {
+      // Notify restaurant room
+      io.to(restaurantId.toString()).emit('new_order', order);
+      console.log(`[Socket] Dispatched new_order event to restaurant room: ${restaurantId}`);
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: 'Order placed successfully.',
+      data: order,
+    });
+  } catch (error: any) {
+    console.error('Order placement error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to place order.', error: error.message });
+  }
+});
+
+/**
+ * @route   GET /api/orders/my-restaurant
+ * @desc    Fetch active and historical orders of restaurant tenant
+ * @access  Private (Restaurant Admin / Staff)
+ */
+router.get('/my-restaurant', protect, restrictTo('restaurant_admin', 'staff'), async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || !req.user.restaurantId) {
+      return res.status(400).json({ success: false, message: 'User is not associated with any restaurant.' });
+    }
+
+    // Default fetch limit: last 100 orders
+    const orders = await Order.find({ restaurantId: req.user.restaurantId })
+      .sort({ createdAt: -1 })
+      .limit(100);
+
+    return res.json({ success: true, count: orders.length, data: orders });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Failed to retrieve orders.', error: error.message });
+  }
+});
+
+/**
+ * @route   GET /api/orders/:id
+ * @desc    Get order details (for tracking screen)
+ * @access  Public
+ */
+router.get('/:id', async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found.' });
+    }
+    return res.json({ success: true, data: order });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Failed to fetch order status.', error: error.message });
+  }
+});
+
+/**
+ * @route   PATCH /api/orders/:id/status
+ * @desc    Update order workflow status (received -> accepted -> preparing -> ready -> served -> completed -> cancelled)
+ * @access  Private (Restaurant Admin / Staff)
+ */
+router.patch('/:id/status', protect, restrictTo('restaurant_admin', 'staff'), async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || !req.user.restaurantId) {
+      return res.status(400).json({ success: false, message: 'User is not associated with any restaurant.' });
+    }
+
+    const { status } = req.body;
+    const validStatuses = ['received', 'accepted', 'preparing', 'ready', 'served', 'completed', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid order status value.' });
+    }
+
+    const order = await Order.findOne({ _id: req.params.id, restaurantId: req.user.restaurantId });
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found in your restaurant.' });
+    }
+
+    order.status = status;
+    await order.save();
+
+    // Broadcast update via WebSockets
+    const io = req.app.get('io');
+    if (io) {
+      // Notify tracking customer room
+      io.to(order._id.toString()).emit('order_status_updated', order);
+      // Notify restaurant room
+      io.to(req.user.restaurantId.toString()).emit('order_updated', order);
+      console.log(`[Socket] Broadcast order_status_updated to: ${order._id}`);
+    }
+
+    // Automatically trigger Invoice Bill generation on completion
+    if (status === 'completed') {
+      const existingBill = await Bill.findOne({ orderId: order._id });
+      if (!existingBill) {
+        const restaurant = await Restaurant.findById(req.user.restaurantId);
+        if (restaurant) {
+          const billNo = generateBillNumber();
+          const pdfFilePath = await generateBillPDF(restaurant, order, billNo);
+
+          const bill = new Bill({
+            billNumber: billNo,
+            restaurantId: req.user.restaurantId,
+            orderId: order._id,
+            subtotal: order.subtotal,
+            tax: order.tax,
+            totalAmount: order.totalAmount,
+            pdfUrl: pdfFilePath,
+          });
+          await bill.save();
+          console.log(`[Billing] Bill invoice generated: ${billNo}`);
+
+          if (io) {
+            io.to(order._id.toString()).emit('bill_ready', bill);
+          }
+        }
+      }
+    }
+
+    return res.json({ success: true, message: `Order status set to ${status}.`, data: order });
+  } catch (error: any) {
+    console.error('Update status error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to update status.', error: error.message });
+  }
+});
+
+export default router;
