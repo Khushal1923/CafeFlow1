@@ -24,6 +24,7 @@ import analyticsRoutes from './routes/analytics';
 import staffRoutes from './routes/staff';
 
 const app = express();
+app.set('trust proxy', 1); // Trust first proxy (Render, Vercel, Nginx, etc.)
 const server = http.createServer(app);
 
 // Strict CORS Configuration based on FRONTEND_URL
