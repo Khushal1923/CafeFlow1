@@ -366,16 +366,6 @@ export default function LoginPage() {
                 {isRegistering ? 'Sign In here' : 'Register your restaurant'}
               </button>
             </span>
-
-            {/* Quick Demo Credentials Help */}
-            {!isRegistering && (
-              <div className="text-[11px] text-left bg-stone-50 dark:bg-stone-900 border border-border/50 rounded-lg p-2.5 text-muted-foreground space-y-1">
-                <span className="font-bold text-foreground">Quick Sandbox Logins:</span>
-                <div>• Super Admin: <code className="bg-muted px-1 rounded text-foreground">superadmin@cafeflow.com</code> / <code className="bg-muted px-1 rounded text-foreground">superadmin123</code></div>
-                <div>• Cafe Admin: <code className="bg-muted px-1 rounded text-foreground">admin@centralcafe.com</code> / <code className="bg-muted px-1 rounded text-foreground">admin123</code></div>
-                <div>• Staff/Kitchen: <code className="bg-muted px-1 rounded text-foreground">staff@centralcafe.com</code> / <code className="bg-muted px-1 rounded text-foreground">staff123</code></div>
-              </div>
-            )}
           </CardFooter>
         </Card>
       </div>
