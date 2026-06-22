@@ -89,16 +89,25 @@ router.post('/register-restaurant', async (req: Request, res: Response) => {
  */
 router.get('/seed', async (req: Request, res: Response) => {
   try {
-    // 1. Check if database is empty
+    // 1. Check if database is empty or force flag is active
+    const force = req.query.force === 'true';
     const restaurantCount = await Restaurant.countDocuments();
-    if (restaurantCount > 0) {
+    if (restaurantCount > 0 && !force) {
       return res.status(400).json({
         success: false,
-        message: 'Database is not empty. Seeding is disabled to prevent overwriting existing data.',
+        message: 'Database is not empty. Seeding is disabled to prevent overwriting existing data. Use ?force=true to override.',
       });
     }
 
     console.log('[API Seeder] Starting database seeding...');
+
+    if (force) {
+      console.log('[API Seeder] Force flag active. Cleaning existing collections...');
+      await Restaurant.deleteMany({});
+      await User.deleteMany({});
+      await Table.deleteMany({});
+      await Dish.deleteMany({});
+    }
 
     // 2. Create Restaurant Tenant
     const cafe = new Restaurant({
