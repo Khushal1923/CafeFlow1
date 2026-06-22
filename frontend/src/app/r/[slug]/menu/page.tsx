@@ -415,7 +415,7 @@ export default function CustomerMenuPage() {
           <div className="grid gap-4">
             {filteredDishes.map((dish) => (
               <Card key={dish._id} className="overflow-hidden border border-border/60 hover:border-primary/20 shadow-sm transition-all duration-200">
-                <CardContent className="p-0 flex h-32">
+                <CardContent className="p-0 flex min-h-[8rem] h-auto">
                   {/* Dish Details */}
                   <div className="flex-1 p-4 flex flex-col justify-between pr-2">
                     <div className="space-y-1">
