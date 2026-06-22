@@ -1,21 +1,26 @@
-FROM node:24-alpine
-
+# Stage 1: Build the backend application
+FROM node:22-alpine AS builder
 WORKDIR /app
-
-# Copy dependency configs
 COPY package*.json ./
-
-# Install packages
-RUN npm install --frozen-lockfile
-
-# Copy source code files
+RUN npm ci
 COPY . .
-
-# Compile TypeScript
 RUN npm run build
 
-# Expose Node server port
-EXPOSE 5000
+# Stage 2: Create a minimal production runner
+FROM node:22-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
 
-# Start compiled server
-CMD ["npm", "start"]
+# Install only production dependencies
+COPY package*.json ./
+RUN npm ci --only=production
+
+# Copy compiled code from builder
+COPY --from=builder /app/dist ./dist
+
+# Create folders for uploads and bills to prevent runtime exceptions
+RUN mkdir -p public/bills public/uploads
+
+EXPOSE 5000
+CMD ["node", "dist/server.js"]
+
