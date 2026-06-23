@@ -22,31 +22,68 @@ const generateBillNumber = (): string => {
 };
 
 /**
+ * Calculates distance between two coordinates in meters using Haversine formula
+ */
+const getDistanceInMeters = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+  const R = 6371e3; // Earth radius in meters
+  const phi1 = (lat1 * Math.PI) / 180;
+  const phi2 = (lat2 * Math.PI) / 180;
+  const deltaPhi = ((lat2 - lat1) * Math.PI) / 180;
+  const deltaLambda = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+    Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c; // in meters
+};
+
+/**
  * @route   POST /api/orders
- * @desc    Place an order after customer phone verification
+ * @desc    Place an order after optional location validation (replaces phone verification)
  * @access  Public
  */
 router.post('/', async (req, res) => {
   try {
-    const { restaurantId, customerName, phoneNumber, tableNumber, items } = req.body;
+    const { restaurantId, customerName, phoneNumber, tableNumber, items, latitude, longitude } = req.body;
 
     if (!restaurantId || !customerName || !phoneNumber || !tableNumber || !items || !items.length) {
       return res.status(400).json({ success: false, message: 'All order details are required.' });
     }
 
-    // 1. Verify OTP Status: Ensure verification occurred
-    const verifiedOtp = await Otp.findOne({ phoneNumber: phoneNumber.trim(), verified: true });
-    if (!verifiedOtp) {
-      return res.status(400).json({
-        success: false,
-        message: 'Phone number verification is required before placing an order.',
-      });
-    }
-
-    // 2. Fetch Restaurant configurations
+    // 1. Fetch Restaurant configurations
     const restaurant = await Restaurant.findById(restaurantId);
     if (!restaurant) {
       return res.status(404).json({ success: false, message: 'Restaurant not found.' });
+    }
+
+    // 2. Validate Geolocation distance if restaurant location is configured
+    if (restaurant.location && restaurant.location.latitude && restaurant.location.longitude) {
+      if (latitude === undefined || longitude === undefined) {
+        return res.status(400).json({
+          success: false,
+          message: 'Location verification is required to place an order at this cafe. Please enable your GPS.',
+        });
+      }
+
+      const distance = getDistanceInMeters(
+        restaurant.location.latitude,
+        restaurant.location.longitude,
+        Number(latitude),
+        Number(longitude)
+      );
+
+      // Maximum allowed distance: 100 meters
+      const MAX_DISTANCE_METERS = 100;
+      if (distance > MAX_DISTANCE_METERS) {
+        console.log(`[Geofence Block] User is ${Math.round(distance)}m away from ${restaurant.name} (Max: ${MAX_DISTANCE_METERS}m)`);
+        return res.status(400).json({
+          success: false,
+          message: `You must be physically present at the restaurant to place an order. (Detected: ${Math.round(distance)} meters away)`,
+        });
+      }
+      console.log(`[Geofence Pass] User is ${Math.round(distance)}m away from ${restaurant.name} (Allowed)`);
     }
 
     // 3. Compute costs securely from Database pricing to avoid client-side tampering

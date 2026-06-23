@@ -12,6 +12,10 @@ export interface IRestaurant extends Document {
     primaryColor?: string;
     darkMode?: boolean;
   };
+  location?: {
+    latitude: number;
+    longitude: number;
+  };
   status: 'active' | 'suspended';
   createdAt: Date;
   updatedAt: Date;
@@ -29,6 +33,10 @@ const RestaurantSchema: Schema = new Schema(
     theme: {
       primaryColor: { type: String, default: '#d97706' }, // default amber-600
       darkMode: { type: Boolean, default: false },
+    },
+    location: {
+      latitude: { type: Number },
+      longitude: { type: Number },
     },
     status: { type: String, enum: ['active', 'suspended'], default: 'active' },
   },

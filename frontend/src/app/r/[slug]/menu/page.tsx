@@ -81,14 +81,11 @@ export default function CustomerMenuPage() {
   const [selectedCustomizations, setSelectedCustomizations] = useState<CartCustomization[]>([]);
   const [specialInstructions, setSpecialInstructions] = useState('');
 
-  // Checkout / OTP State
+  // Checkout / Location Verification State
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [otpCode, setOtpCode] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpLoading, setOtpLoading] = useState(false);
-  const [otpCountdown, setOtpCountdown] = useState(120); // 2 minutes
+  const [otpLoading, setOtpLoading] = useState(false); // Used for order placement loading spinner
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   // Categories List
@@ -121,15 +118,6 @@ export default function CustomerMenuPage() {
 
     loadMenu();
   }, [slug, cartTableNumber, cartRestaurantId, setTableContext]);
-
-  // OTP Countdown effect
-  useEffect(() => {
-    if (!otpSent || otpCountdown <= 0) return;
-    const timer = setInterval(() => {
-      setOtpCountdown((prev) => prev - 1);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [otpSent, otpCountdown]);
 
   if (loading) {
     return (
@@ -229,80 +217,71 @@ export default function CustomerMenuPage() {
     return customizationDish.price + extra;
   };
 
-  // Core OTP send logic — called by both the form submit and the Resend button
-  const sendOtpRequest = async () => {
+  // Place order directly with optional geofencing check
+  const handlePlaceOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
     setCheckoutError(null);
+    setOtpLoading(true);
 
     if (!customerName || !phoneNumber) {
       setCheckoutError('Please enter your name and phone number.');
+      setOtpLoading(false);
       return;
     }
 
-    setOtpLoading(true);
-    try {
-      await api.post('/auth/otp/send', { phoneNumber });
-      setOtpSent(true);
-      setOtpCountdown(120);
-    } catch (err: any) {
-      console.error('[OTP Send] Failed:', err.response?.data || err.message);
-      setCheckoutError(err.response?.data?.message || 'Failed to send verification OTP.');
-    } finally {
-      setOtpLoading(false);
-    }
-  };
+    const placeOrderWithCoords = async (latitude?: number, longitude?: number) => {
+      try {
+        const orderData = {
+          restaurantId: restaurant._id,
+          customerName,
+          phoneNumber,
+          tableNumber: cartTableNumber || '1',
+          items: cartItems.map((item) => ({
+            dishId: item.dishId,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+            customizations: item.customizations,
+            specialInstructions: item.specialInstructions,
+          })),
+          latitude,
+          longitude,
+        };
 
-  // Request SMS verification OTP (form submit handler)
-  const handleRequestOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await sendOtpRequest();
-  };
+        const orderResponse = await api.post('/orders', orderData);
+        const newOrder = orderResponse.data.data;
 
-  // Verify OTP and complete checkout placement
-  const handleVerifyOtpAndPlaceOrder = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCheckoutError(null);
+        // Reset state
+        clearCart();
+        setIsCheckoutOpen(false);
+        setIsCartOpen(false);
 
-    if (!otpCode) {
-      setCheckoutError('Please enter the 6-digit verification code.');
-      return;
-    }
+        // Redirect to status tracker
+        router.push(`/r/${slug}/order-status/${newOrder._id}`);
+      } catch (err: any) {
+        console.error('[Order Placement Failed]:', err.response?.data || err.message);
+        setCheckoutError(err.response?.data?.message || 'Failed to place order. Please try again.');
+      } finally {
+        setOtpLoading(false);
+      }
+    };
 
-    setOtpLoading(true);
-    try {
-      // 1. Verify code
-      await api.post('/auth/otp/verify', { phoneNumber, otp: otpCode });
-
-      // 2. Verified! Proceed to place order
-      const orderData = {
-        restaurantId: restaurant._id,
-        customerName,
-        phoneNumber,
-        tableNumber: cartTableNumber || '1',
-        items: cartItems.map((item) => ({
-          dishId: item.dishId,
-          name: item.name,
-          price: item.price,
-          quantity: item.quantity,
-          customizations: item.customizations,
-          specialInstructions: item.specialInstructions,
-        })),
-      };
-
-      const orderResponse = await api.post('/orders', orderData);
-      const newOrder = orderResponse.data.data;
-
-      // Reset state
-      clearCart();
-      setIsCheckoutOpen(false);
-      setIsCartOpen(false);
-
-      // Redirect to status tracker
-      router.push(`/r/${slug}/order-status/${newOrder._id}`);
-    } catch (err: any) {
-      console.error('[OTP Verify / Order] Failed:', err.response?.data || err.message);
-      setCheckoutError(err.response?.data?.message || 'Verification or order placement failed.');
-    } finally {
-      setOtpLoading(false);
+    // Attempt to request geolocation
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          placeOrderWithCoords(position.coords.latitude, position.coords.longitude);
+        },
+        (error) => {
+          console.warn('[Geolocation Error]: Failed to get location:', error.message);
+          // Proceed to place order; the backend handles checking if geofencing is mandatory
+          placeOrderWithCoords();
+        },
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      );
+    } else {
+      console.warn('[Geolocation API]: Not supported in browser.');
+      placeOrderWithCoords();
     }
   };
 
@@ -722,9 +701,7 @@ export default function CustomerMenuPage() {
               <h3 className="font-serif font-bold text-base md:text-lg flex items-center gap-1.5">
                 <ShieldCheck className="w-5 h-5 text-primary animate-pulse" /> Customer Verification
               </h3>
-              <button 
-                onClick={() => {
-                  setOtpSent(false);
+               onClick={() => {
                   setCheckoutError(null);
                   setIsCheckoutOpen(false);
                 }}
@@ -740,104 +717,57 @@ export default function CustomerMenuPage() {
               </div>
             )}
 
-            {!otpSent ? (
-              /* Request OTP form */
-              <form onSubmit={handleRequestOtp} className="space-y-4 text-sm">
-                <p className="text-xs text-muted-foreground">
-                  Before placing your dine-in order, please complete a quick 1-step verification to link your order to your mobile number.
-                </p>
+            <form onSubmit={handlePlaceOrder} className="space-y-4 text-sm">
+              <p className="text-xs text-muted-foreground">
+                Please enter your details below to place your dine-in order. We will verify your location to ensure you are at the table.
+              </p>
 
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide">
-                      Your Full Name
-                    </label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-                      <input
-                        type="text"
-                        required
-                        value={customerName}
-                        onChange={(e) => setCustomerName(e.target.value)}
-                        placeholder="John Doe"
-                        className="w-full text-xs bg-secondary/50 text-foreground border border-border rounded-xl pl-9 pr-4 py-2.5 outline-none focus:ring-2 focus:ring-primary focus:bg-background transition-all"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide">
-                      Mobile Number
-                    </label>
-                    <div className="relative">
-                      <Phone className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-                      <input
-                        type="tel"
-                        required
-                        value={phoneNumber}
-                        onChange={(e) => setPhoneNumber(e.target.value)}
-                        placeholder="e.g. +919876543210"
-                        className="w-full text-xs bg-secondary/50 text-foreground border border-border rounded-xl pl-9 pr-4 py-2.5 outline-none focus:ring-2 focus:ring-primary focus:bg-background transition-all"
-                      />
-                    </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide">
+                    Your Full Name
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
+                    <input
+                      type="text"
+                      required
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      placeholder="John Doe"
+                      className="w-full text-xs bg-secondary/50 text-foreground border border-border rounded-xl pl-9 pr-4 py-2.5 outline-none focus:ring-2 focus:ring-primary focus:bg-background transition-all"
+                    />
                   </div>
                 </div>
-
-                <Button type="submit" disabled={otpLoading} className="w-full mt-2 cursor-pointer font-bold">
-                  {otpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Send Verification OTP'}
-                </Button>
-              </form>
-            ) : (
-              /* Enter OTP form */
-              <form onSubmit={handleVerifyOtpAndPlaceOrder} className="space-y-4 text-sm">
-                <p className="text-xs text-muted-foreground">
-                  We have dispatched a 6-digit verification code to <span className="font-bold text-foreground">{phoneNumber}</span>. 
-                  (Check the backend terminal console for code logs).
-                </p>
 
                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide text-center">
-                    Enter 6-Digit OTP Code
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide">
+                    Mobile Number
                   </label>
-                  <input
-                    type="text"
-                    required
-                    value={otpCode}
-                    onChange={(e) => setOtpCode(e.target.value.trim())}
-                    placeholder="123456"
-                    className="w-full text-center text-lg font-mono font-bold bg-secondary/50 text-foreground border border-border rounded-xl py-3 outline-none focus:ring-2 focus:ring-primary focus:bg-background transition-all tracking-[0.4em]"
-                    maxLength={6}
-                  />
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
+                    <input
+                      type="tel"
+                      required
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      placeholder="e.g. 9876543210"
+                      className="w-full text-xs bg-secondary/50 text-foreground border border-border rounded-xl pl-9 pr-4 py-2.5 outline-none focus:ring-2 focus:ring-primary focus:bg-background transition-all"
+                    />
+                  </div>
                 </div>
+              </div>
 
-                {/* Countdown / Resend */}
-                <div className="text-center">
-                  {otpCountdown > 0 ? (
-                    <span className="text-xs text-muted-foreground">
-                      Resend code in {Math.floor(otpCountdown / 60)}:{(otpCountdown % 60).toString().padStart(2, '0')}
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={sendOtpRequest}
-                      className="text-xs font-semibold text-primary hover:underline cursor-pointer focus:outline-none"
-                    >
-                      Resend OTP Code
-                    </button>
-                  )}
-                </div>
-
-                <Button type="submit" disabled={otpLoading} className="w-full mt-2 cursor-pointer font-bold">
-                  {otpLoading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" /> Placing Order...
-                    </>
-                  ) : (
-                    'Verify Code & Place Order'
-                  )}
-                </Button>
-              </form>
-            )}
+              <Button type="submit" disabled={otpLoading} className="w-full mt-2 cursor-pointer font-bold gap-2">
+                {otpLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Verifying & Placing Order...
+                  </>
+                ) : (
+                  'Place Dine-in Order'
+                )}
+              </Button>
+            </form>}
           </div>
         </div>
       )}
