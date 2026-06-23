@@ -50,6 +50,7 @@ export default function AdminMenuPage() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('Coffee');
+  const [customCategory, setCustomCategory] = useState('');
   const [price, setPrice] = useState('');
   const [veg, setVeg] = useState(true);
   const [image, setImage] = useState('');
@@ -62,7 +63,9 @@ export default function AdminMenuPage() {
   const [tempOptionPrice, setTempOptionPrice] = useState('');
   const [tempOptionsList, setTempOptionsList] = useState<CustomizationOption[]>([]);
 
-  const categories = ['Coffee', 'Tea', 'Mocktails', 'Snacks', 'Breakfast', 'Lunch', 'Dinner', 'Desserts'];
+  const defaultCategories = ['Coffee', 'Tea', 'Mocktails', 'Snacks', 'Breakfast', 'Lunch', 'Dinner', 'Desserts'];
+  const activeCategories = Array.from(new Set(dishes.map((d) => d.category))).filter(Boolean);
+  const categoriesList = Array.from(new Set([...defaultCategories, ...activeCategories]));
 
   // Load menu items
   const loadMenu = async () => {
@@ -93,6 +96,7 @@ export default function AdminMenuPage() {
     setName('');
     setDescription('');
     setCategory('Coffee');
+    setCustomCategory('');
     setPrice('');
     setVeg(true);
     setImage('');
@@ -106,6 +110,7 @@ export default function AdminMenuPage() {
     setName(dish.name);
     setDescription(dish.description || '');
     setCategory(dish.category);
+    setCustomCategory('');
     setPrice(dish.price.toString());
     setVeg(dish.veg);
     setImage(dish.image || '');
@@ -176,13 +181,14 @@ export default function AdminMenuPage() {
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !price || !category) return;
+    const finalCategory = category === 'custom_add_new' ? customCategory.trim() : category;
+    if (!name || !price || !finalCategory) return;
 
     const payload = {
       name,
       description,
       price: Number(price),
-      category,
+      category: finalCategory,
       veg,
       image: image.trim() || undefined,
       customizations,
@@ -255,7 +261,7 @@ export default function AdminMenuPage() {
             >
               All Categories
             </button>
-            {categories.map((cat) => (
+            {categoriesList.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setCategoryFilter(cat)}
@@ -410,11 +416,26 @@ export default function AdminMenuPage() {
                     onChange={(e) => setCategory(e.target.value)}
                     className="w-full text-xs bg-secondary/30 text-foreground border border-border rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-primary focus:bg-background transition-all cursor-pointer"
                   >
-                    {categories.map((c) => (
+                    {categoriesList.map((c) => (
                       <option key={c} value={c}>{c}</option>
                     ))}
+                    <option value="custom_add_new">+ Add New Category</option>
                   </select>
                 </div>
+
+                {category === 'custom_add_new' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wider">New Category Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={customCategory}
+                      onChange={(e) => setCustomCategory(e.target.value)}
+                      placeholder="e.g. Soups, Juices"
+                      className="w-full text-xs bg-secondary/30 text-foreground border border-border rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-primary focus:bg-background transition-all"
+                    />
+                  </div>
+                )}
 
                 <div className="flex items-center pt-6">
                   <button
