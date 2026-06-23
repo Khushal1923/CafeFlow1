@@ -11,8 +11,21 @@ import { Badge } from '../../components/ui/badge';
 import ThemeToggle from '../../components/ThemeToggle';
 import { 
   Loader2, LogOut, Clock, ChefHat, CheckSquare, BellRing, 
-  Sparkles, Coffee, AlertTriangle, Play, CheckCircle2 
+  Sparkles, Coffee, AlertTriangle, Play, CheckCircle2, X 
 } from 'lucide-react';
+
+interface Bill {
+  _id: string;
+  billNumber: string;
+  totalAmount: number;
+  pdfUrl?: string;
+  orderId?: {
+    customerName?: string;
+    tableNumber?: string;
+  };
+  createdAt: string;
+}
+
 
 interface OrderItem {
   dishId: string;
@@ -47,8 +60,34 @@ export default function KitchenDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Recent completed bills
+  const [recentBills, setRecentBills] = useState<Bill[]>([]);
+  const [dismissedBillIds, setDismissedBillIds] = useState<string[]>([]);
+
   // Bind to socket updates for this restaurant room
   const socket = useSocket('restaurant', restaurantId);
+
+  // Load dismissed bill IDs from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem('dismissed_bills');
+    if (stored) {
+      try {
+        setDismissedBillIds(JSON.parse(stored));
+      } catch (e) {
+        console.error('Failed to parse dismissed bills:', e);
+      }
+    }
+  }, []);
+
+  // Fetch recent bills from API
+  const fetchRecentBills = async () => {
+    try {
+      const response = await api.get('/bills/my-restaurant');
+      setRecentBills(response.data.data);
+    } catch (err) {
+      console.error('Failed to fetch recent bills:', err);
+    }
+  };
 
   // Handle unauthorized users (ensure role is admin or staff)
   useEffect(() => {
@@ -57,7 +96,7 @@ export default function KitchenDashboard() {
     }
   }, [user, router]);
 
-  // Load active orders on mount
+  // Load active orders and recent bills on mount
   useEffect(() => {
     if (!restaurantId) return;
 
@@ -78,6 +117,7 @@ export default function KitchenDashboard() {
     };
 
     fetchActiveOrders();
+    fetchRecentBills();
   }, [restaurantId]);
 
   // Hook socket triggers for real time order additions / modifications
@@ -103,6 +143,10 @@ export default function KitchenDashboard() {
       setOrders((prev) => {
         // If completed or cancelled, remove from dashboard list
         if (updatedOrder.status === 'completed' || updatedOrder.status === 'cancelled') {
+          if (updatedOrder.status === 'completed') {
+            // Fetch recent bills to show updated info
+            fetchRecentBills();
+          }
           return prev.filter((o) => o._id !== updatedOrder._id);
         }
         
@@ -148,6 +192,10 @@ export default function KitchenDashboard() {
       // Update in local state
       setOrders((prev) => {
         if (nextStatus === 'completed' || nextStatus === 'cancelled') {
+          if (nextStatus === 'completed') {
+            // Refresh recent bills list
+            fetchRecentBills();
+          }
           return prev.filter((o) => o._id !== orderId);
         }
         return prev.map((o) => (o._id === orderId ? updated : o));
@@ -156,6 +204,29 @@ export default function KitchenDashboard() {
       alert(err.response?.data?.message || 'Failed to update order status.');
     }
   };
+
+  const getBackendBillUrl = (pdfPath: string): string => {
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const filename = pdfPath.split('/').pop() || '';
+    return `${apiBaseUrl}/api/bills/download/${filename}`;
+  };
+
+  const dismissBill = (billId: string) => {
+    const updated = [...dismissedBillIds, billId];
+    setDismissedBillIds(updated);
+    localStorage.setItem('dismissed_bills', JSON.stringify(updated));
+  };
+
+  const clearAllRecentBills = () => {
+    const allBillIds = recentBills.map(b => b._id);
+    const updated = Array.from(new Set([...dismissedBillIds, ...allBillIds]));
+    setDismissedBillIds(updated);
+    localStorage.setItem('dismissed_bills', JSON.stringify(updated));
+  };
+
+  const visibleBills = recentBills
+    .filter((b) => !dismissedBillIds.includes(b._id))
+    .slice(0, 5);
 
   const handleLogout = () => {
     clearAuth();
@@ -241,142 +312,221 @@ export default function KitchenDashboard() {
           ))}
         </div>
 
-        {orders.length === 0 ? (
-          /* Empty Active Queue */
-          <div className="text-center py-24 border-2 border-dashed border-border/60 rounded-3xl space-y-3">
-            <Coffee className="w-12 h-12 text-muted-foreground/40 mx-auto" />
-            <h2 className="font-serif font-bold text-muted-foreground text-lg">Kitchen Queue Clear!</h2>
-            <p className="text-xs text-muted-foreground/80 max-w-xs mx-auto">There are no incoming active dine-in orders currently. Chime alerts will play when customers order.</p>
-          </div>
-        ) : (
-          /* Active orders card grid */
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {orders.map((order) => (
-              <Card key={order._id} className="border border-border/70 hover:border-primary/30 flex flex-col justify-between shadow shadow-stone-150/40 relative overflow-hidden">
-                {/* Visual Status Indicator Strip */}
-                <div className={`h-1.5 w-full absolute top-0 left-0 ${
-                  order.status === 'received' ? 'bg-red-500 animate-pulse' :
-                  order.status === 'accepted' ? 'bg-blue-500' :
-                  order.status === 'preparing' ? 'bg-amber-500' :
-                  order.status === 'ready' ? 'bg-emerald-500 animate-pulse' : 'bg-stone-500'
-                }`} />
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Active Orders Queue (Left side, takes 9 columns on desktop) */}
+          <div className="lg:col-span-9 space-y-6">
+            {orders.length === 0 ? (
+              /* Empty Active Queue */
+              <div className="text-center py-24 border-2 border-dashed border-border/60 rounded-3xl space-y-3 bg-card/20">
+                <Coffee className="w-12 h-12 text-muted-foreground/40 mx-auto" />
+                <h2 className="font-serif font-bold text-muted-foreground text-lg">Kitchen Queue Clear!</h2>
+                <p className="text-xs text-muted-foreground/80 max-w-xs mx-auto">There are no incoming active dine-in orders currently. Chime alerts will play when customers order.</p>
+              </div>
+            ) : (
+              /* Active orders card grid */
+              <div className="grid sm:grid-cols-2 gap-6">
+                {orders.map((order) => (
+                  <Card key={order._id} className="border border-border/70 hover:border-primary/30 flex flex-col justify-between shadow shadow-stone-150/40 relative overflow-hidden">
+                    {/* Visual Status Indicator Strip */}
+                    <div className={`h-1.5 w-full absolute top-0 left-0 ${
+                      order.status === 'received' ? 'bg-red-500 animate-pulse' :
+                      order.status === 'accepted' ? 'bg-blue-500' :
+                      order.status === 'preparing' ? 'bg-amber-500' :
+                      order.status === 'ready' ? 'bg-emerald-500 animate-pulse' : 'bg-stone-500'
+                    }`} />
 
-                <CardHeader className="pb-2 pt-5">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-muted-foreground">Table number</span>
-                      <h3 className="font-serif text-3xl font-extrabold text-foreground tracking-tight">
-                        T-{order.tableNumber}
-                      </h3>
-                    </div>
-
-                    <div className="text-right space-y-1.5">
-                      <Badge variant={getStatusBadgeStyle(order.status) as any} className="text-[10px] py-0.5 capitalize font-extrabold">
-                        {order.status}
-                      </Badge>
-                      <div className="flex items-center gap-1 text-[10px] text-muted-foreground justify-end font-semibold">
-                        <Clock className="w-3.5 h-3.5" />
-                        <span>{getElapsedString(order.createdAt)}</span>
-                      </div>
-                    </div>
-                  </div>
-                </CardHeader>
-
-                {/* Items List */}
-                <CardContent className="py-3 flex-1">
-                  <div className="divide-y divide-border/40 text-xs">
-                    {order.items.map((item, idx) => (
-                      <div key={idx} className="py-2.5 space-y-1">
-                        <div className="flex justify-between items-start">
-                          <span className="font-bold text-sm text-foreground">
-                            {item.name} <span className="text-primary font-bold">x {item.quantity}</span>
-                          </span>
+                    <CardHeader className="pb-2 pt-5">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-muted-foreground">Table number</span>
+                          <h3 className="font-serif text-3xl font-extrabold text-foreground tracking-tight">
+                            T-{order.tableNumber}
+                          </h3>
                         </div>
 
-                        {/* Customizations details */}
-                        {item.customizations && item.customizations.length > 0 && (
-                          <div className="text-[10px] text-muted-foreground font-medium pl-2">
-                            {item.customizations.map(c => `${c.name}: ${c.selectedOption}`).join(', ')}
+                        <div className="text-right space-y-1.5">
+                          <Badge variant={getStatusBadgeStyle(order.status) as any} className="text-[10px] py-0.5 capitalize font-extrabold">
+                            {order.status}
+                          </Badge>
+                          <div className="flex items-center gap-1 text-[10px] text-muted-foreground justify-end font-semibold">
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>{getElapsedString(order.createdAt)}</span>
                           </div>
+                        </div>
+                      </div>
+                    </CardHeader>
+
+                    {/* Items List */}
+                    <CardContent className="py-3 flex-1">
+                      <div className="divide-y divide-border/40 text-xs">
+                        {order.items.map((item, idx) => (
+                          <div key={idx} className="py-2.5 space-y-1">
+                            <div className="flex justify-between items-start">
+                              <span className="font-bold text-sm text-foreground">
+                                {item.name} <span className="text-primary font-bold">x {item.quantity}</span>
+                              </span>
+                            </div>
+
+                            {/* Customizations details */}
+                            {item.customizations && item.customizations.length > 0 && (
+                              <div className="text-[10px] text-muted-foreground font-medium pl-2">
+                                {item.customizations.map(c => `${c.name}: ${c.selectedOption}`).join(', ')}
+                              </div>
+                            )}
+
+                            {/* Instructions */}
+                            {item.specialInstructions && (
+                              <div className="bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 text-[10px] p-1.5 rounded-lg font-medium italic mt-1">
+                                * note: "{item.specialInstructions}"
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+
+                    {/* Action buttons */}
+                    <div className="p-4 border-t border-border/40 bg-secondary/10 flex items-center justify-between gap-3">
+                      <button
+                        onClick={() => handleUpdateStatus(order._id, 'cancelled')}
+                        className="px-3 py-2 bg-background border border-border text-destructive hover:bg-destructive/10 hover:border-destructive/30 rounded-lg text-xs font-semibold cursor-pointer transition-all shrink-0"
+                        title="Cancel Order"
+                      >
+                        Cancel
+                      </button>
+
+                      <div className="flex-1">
+                        {order.status === 'received' && (
+                          <Button
+                            size="sm"
+                            onClick={() => handleUpdateStatus(order._id, 'accepted')}
+                            className="w-full text-xs font-bold gap-1 bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-blue-500/10"
+                          >
+                            Accept Order <CheckSquare className="w-3.5 h-3.5" />
+                          </Button>
                         )}
 
-                        {/* Instructions */}
-                        {item.specialInstructions && (
-                          <div className="bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 text-[10px] p-1.5 rounded-lg font-medium italic mt-1">
-                            * note: "{item.specialInstructions}"
-                          </div>
+                        {order.status === 'accepted' && (
+                          <Button
+                            size="sm"
+                            onClick={() => handleUpdateStatus(order._id, 'preparing')}
+                            className="w-full text-xs font-bold gap-1 bg-amber-600 hover:bg-amber-700 text-white cursor-pointer shadow-amber-500/10"
+                          >
+                            Start Cooking <Play className="w-3.5 h-3.5" />
+                          </Button>
                         )}
+
+                        {order.status === 'preparing' && (
+                          <Button
+                            size="sm"
+                            onClick={() => handleUpdateStatus(order._id, 'ready')}
+                            className="w-full text-xs font-bold gap-1 bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-emerald-500/10"
+                          >
+                            Mark Ready <BellRing className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+
+                        {order.status === 'ready' && (
+                          <Button
+                            size="sm"
+                            onClick={() => handleUpdateStatus(order._id, 'served')}
+                            className="w-full text-xs font-bold gap-1 bg-primary text-white cursor-pointer"
+                          >
+                            Mark Served <Coffee className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+
+                        {order.status === 'served' && (
+                          <Button
+                            size="sm"
+                            onClick={() => handleUpdateStatus(order._id, 'completed')}
+                            className="w-full text-xs font-bold gap-1 bg-stone-900 hover:bg-stone-850 dark:bg-stone-100 dark:hover:bg-stone-50 dark:text-stone-950 text-white cursor-pointer"
+                          >
+                            Complete & Bill <CheckCircle2 className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Recent Completed Bills (Right side, takes 3 columns on desktop) */}
+          <div className="lg:col-span-3 space-y-4">
+            <Card className="border border-border/60 shadow-md">
+              <CardHeader className="pb-2 pt-4 px-4">
+                <CardTitle className="text-sm font-serif font-black flex items-center gap-1.5 justify-between animate-fade-in">
+                  <span className="flex items-center gap-1.5">
+                    <CheckSquare className="w-4 h-4 text-primary" /> Recent Bills
+                  </span>
+                  {visibleBills.length > 0 && (
+                    <button
+                      onClick={clearAllRecentBills}
+                      className="text-[10px] font-sans font-semibold text-muted-foreground hover:text-destructive cursor-pointer transition-colors"
+                    >
+                      Clear All
+                    </button>
+                  )}
+                </CardTitle>
+                <p className="text-[10px] text-muted-foreground">Last 5 billed customers</p>
+              </CardHeader>
+              <CardContent className="p-4 pt-0">
+                {visibleBills.length === 0 ? (
+                  <div className="text-center py-8 text-xs text-muted-foreground font-medium">
+                    No recent bills. Complete active orders to populate.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {visibleBills.map((bill) => (
+                      <div
+                        key={bill._id}
+                        className="relative border border-border/40 p-3 rounded-xl bg-secondary/10 flex flex-col gap-1.5 hover:border-primary/20 transition-all animate-fade-in"
+                      >
+                        {/* Dismiss Button */}
+                        <button
+                          onClick={() => dismissBill(bill._id)}
+                          className="absolute top-2 right-2 p-1 text-muted-foreground hover:text-destructive cursor-pointer rounded-full hover:bg-secondary/40 transition-colors"
+                          title="Dismiss"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+
+                        <div className="pr-5">
+                          <span className="text-[9px] uppercase font-bold text-muted-foreground font-sans">
+                            Table {bill.orderId?.tableNumber || 'N/A'} • {bill.orderId?.customerName || 'Walk-in'}
+                          </span>
+                          <h4 className="text-xs font-bold text-foreground truncate mt-0.5 font-sans">
+                            {bill.billNumber}
+                          </h4>
+                        </div>
+
+                        <div className="flex items-center justify-between mt-1 pt-1.5 border-t border-border/20">
+                          <span className="text-xs font-black text-primary font-sans">
+                            Rs. {bill.totalAmount.toFixed(2)}
+                          </span>
+
+                          {bill.pdfUrl && (
+                            <button
+                              onClick={() => {
+                                const win = window.open(getBackendBillUrl(bill.pdfUrl || ''), '_blank');
+                                win?.focus();
+                              }}
+                              className="text-[10px] text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-bold flex items-center gap-0.5 cursor-pointer font-sans"
+                            >
+                              View Invoice
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
-                </CardContent>
-
-                {/* Action buttons */}
-                <div className="p-4 border-t border-border/40 bg-secondary/10 flex items-center justify-between gap-3">
-                  <button
-                    onClick={() => handleUpdateStatus(order._id, 'cancelled')}
-                    className="px-3 py-2 bg-background border border-border text-destructive hover:bg-destructive/10 hover:border-destructive/30 rounded-lg text-xs font-semibold cursor-pointer transition-all shrink-0"
-                    title="Cancel Order"
-                  >
-                    Cancel
-                  </button>
-
-                  <div className="flex-1">
-                    {order.status === 'received' && (
-                      <Button
-                        size="sm"
-                        onClick={() => handleUpdateStatus(order._id, 'accepted')}
-                        className="w-full text-xs font-bold gap-1 bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-blue-500/10"
-                      >
-                        Accept Order <CheckSquare className="w-3.5 h-3.5" />
-                      </Button>
-                    )}
-
-                    {order.status === 'accepted' && (
-                      <Button
-                        size="sm"
-                        onClick={() => handleUpdateStatus(order._id, 'preparing')}
-                        className="w-full text-xs font-bold gap-1 bg-amber-600 hover:bg-amber-700 text-white cursor-pointer shadow-amber-500/10"
-                      >
-                        Start Cooking <Play className="w-3.5 h-3.5" />
-                      </Button>
-                    )}
-
-                    {order.status === 'preparing' && (
-                      <Button
-                        size="sm"
-                        onClick={() => handleUpdateStatus(order._id, 'ready')}
-                        className="w-full text-xs font-bold gap-1 bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-emerald-500/10"
-                      >
-                        Mark Ready <BellRing className="w-3.5 h-3.5" />
-                      </Button>
-                    )}
-
-                    {order.status === 'ready' && (
-                      <Button
-                        size="sm"
-                        onClick={() => handleUpdateStatus(order._id, 'served')}
-                        className="w-full text-xs font-bold gap-1 bg-primary text-white cursor-pointer"
-                      >
-                        Mark Served <Coffee className="w-3.5 h-3.5" />
-                      </Button>
-                    )}
-
-                    {order.status === 'served' && (
-                      <Button
-                        size="sm"
-                        onClick={() => handleUpdateStatus(order._id, 'completed')}
-                        className="w-full text-xs font-bold gap-1 bg-stone-900 hover:bg-stone-850 dark:bg-stone-100 dark:hover:bg-stone-50 dark:text-stone-950 text-white cursor-pointer"
-                      >
-                        Complete & Bill <CheckCircle2 className="w-3.5 h-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </Card>
-            ))}
+                )}
+              </CardContent>
+            </Card>
           </div>
-        )}
+        </div>
       </main>
     </div>
   );
