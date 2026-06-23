@@ -701,6 +701,7 @@ export default function CustomerMenuPage() {
               <h3 className="font-serif font-bold text-base md:text-lg flex items-center gap-1.5">
                 <ShieldCheck className="w-5 h-5 text-primary animate-pulse" /> Customer Verification
               </h3>
+             <button
                onClick={() => {
                   setCheckoutError(null);
                   setIsCheckoutOpen(false);
@@ -767,7 +768,7 @@ export default function CustomerMenuPage() {
                   'Place Dine-in Order'
                 )}
               </Button>
-            </form>}
+            </form>
           </div>
         </div>
       )}
