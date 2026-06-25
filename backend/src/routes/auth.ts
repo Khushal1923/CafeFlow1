@@ -436,18 +436,19 @@ router.post('/otp/send', async (req: Request, res: Response) => {
     // Clean formatting
     const formattedPhone = phoneNumber.trim();
 
-    // Create 6-digit OTP
+    // Create 6-digit OTP and hash it before storing
     const otpCode = generateOTP();
+    const hashedOtp = await bcrypt.hash(otpCode, 10);
     const expiresAt = new Date(Date.now() + 2 * 60 * 1000); // 2 minutes expiry
 
-    // Save to Database (upsert to overwrite active OTPs for the phone)
+    // Save hashed OTP to Database (upsert to overwrite active OTPs for the phone)
     await Otp.findOneAndUpdate(
       { phoneNumber: formattedPhone },
-      { otp: otpCode, expiresAt, verified: false },
+      { otp: hashedOtp, expiresAt, verified: false },
       { upsert: true, new: true }
     );
 
-    // Call service to send SMS/Mock console
+    // Call service to send the plain OTP via SMS/Mock console
     await sendOTP(formattedPhone, otpCode);
 
     return res.json({
@@ -455,7 +456,7 @@ router.post('/otp/send', async (req: Request, res: Response) => {
       message: 'OTP sent successfully. Valid for 2 minutes.',
     });
   } catch (error: any) {
-    console.error('Send OTP error:', error);
+    console.error('[OTP Send] Error:', error);
     return res.status(500).json({ success: false, message: 'Failed to send OTP.', error: error.message });
   }
 });
@@ -485,8 +486,9 @@ router.post('/otp/verify', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: 'OTP has expired. Please request a new one.' });
     }
 
-    // Validate correctness
-    if (otpRecord.otp !== otp.trim()) {
+    // Validate correctness using bcrypt compare (OTP is stored hashed)
+    const isOtpValid = await bcrypt.compare(otp.trim(), otpRecord.otp);
+    if (!isOtpValid) {
       return res.status(400).json({ success: false, message: 'Incorrect OTP. Please try again.' });
     }
 
@@ -499,7 +501,7 @@ router.post('/otp/verify', async (req: Request, res: Response) => {
       message: 'Phone number verified successfully.',
     });
   } catch (error: any) {
-    console.error('Verify OTP error:', error);
+    console.error('[OTP Verify] Error:', error);
     return res.status(500).json({ success: false, message: 'Failed to verify OTP.', error: error.message });
   }
 });

@@ -229,9 +229,8 @@ export default function CustomerMenuPage() {
     return customizationDish.price + extra;
   };
 
-  // Request SMS verification OTP
-  const handleRequestOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Core OTP send logic — called by both the form submit and the Resend button
+  const sendOtpRequest = async () => {
     setCheckoutError(null);
 
     if (!customerName || !phoneNumber) {
@@ -245,10 +244,17 @@ export default function CustomerMenuPage() {
       setOtpSent(true);
       setOtpCountdown(120);
     } catch (err: any) {
+      console.error('[OTP Send] Failed:', err.response?.data || err.message);
       setCheckoutError(err.response?.data?.message || 'Failed to send verification OTP.');
     } finally {
       setOtpLoading(false);
     }
+  };
+
+  // Request SMS verification OTP (form submit handler)
+  const handleRequestOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await sendOtpRequest();
   };
 
   // Verify OTP and complete checkout placement
@@ -293,6 +299,7 @@ export default function CustomerMenuPage() {
       // Redirect to status tracker
       router.push(`/r/${slug}/order-status/${newOrder._id}`);
     } catch (err: any) {
+      console.error('[OTP Verify / Order] Failed:', err.response?.data || err.message);
       setCheckoutError(err.response?.data?.message || 'Verification or order placement failed.');
     } finally {
       setOtpLoading(false);
@@ -812,7 +819,7 @@ export default function CustomerMenuPage() {
                   ) : (
                     <button
                       type="button"
-                      onClick={handleRequestOtp}
+                      onClick={sendOtpRequest}
                       className="text-xs font-semibold text-primary hover:underline cursor-pointer focus:outline-none"
                     >
                       Resend OTP Code
