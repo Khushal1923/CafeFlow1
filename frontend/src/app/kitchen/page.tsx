@@ -26,6 +26,14 @@ interface Bill {
   createdAt: string;
 }
 
+interface WaiterRequest {
+  _id: string;
+  tableNumber: string;
+  type: 'call_waiter' | 'request_water' | 'request_bill' | 'other';
+  status: 'pending';
+  createdAt: string;
+}
+
 
 interface OrderItem {
   dishId: string;
@@ -64,8 +72,21 @@ export default function KitchenDashboard() {
   const [recentBills, setRecentBills] = useState<Bill[]>([]);
   const [dismissedBillIds, setDismissedBillIds] = useState<string[]>([]);
 
+  // Waiter active requests
+  const [waiterRequests, setWaiterRequests] = useState<WaiterRequest[]>([]);
+
   // Bind to socket updates for this restaurant room
   const socket = useSocket('restaurant', restaurantId);
+
+  // Fetch waiter active requests
+  const fetchActiveWaiterRequests = async () => {
+    try {
+      const response = await api.get('/orders/waiter-requests/active');
+      setWaiterRequests(response.data.data);
+    } catch (err) {
+      console.error('Failed to fetch waiter requests:', err);
+    }
+  };
 
   // Load dismissed bill IDs from localStorage on mount
   useEffect(() => {
@@ -118,6 +139,7 @@ export default function KitchenDashboard() {
 
     fetchActiveOrders();
     fetchRecentBills();
+    fetchActiveWaiterRequests();
   }, [restaurantId]);
 
   // Hook socket triggers for real time order additions / modifications
@@ -155,9 +177,25 @@ export default function KitchenDashboard() {
       });
     });
 
+    socket.on('waiter_requested', (newReq: WaiterRequest) => {
+      console.log('[Kitchen Socket] New service request:', newReq);
+      setWaiterRequests((prev) => {
+        if (prev.some((r) => r._id === newReq._id)) return prev;
+        return [newReq, ...prev];
+      });
+      playWaiterChime();
+    });
+
+    socket.on('waiter_request_resolved', (payload: { _id: string }) => {
+      console.log('[Kitchen Socket] Service request resolved elsewhere:', payload._id);
+      setWaiterRequests((prev) => prev.filter((r) => r._id !== payload._id));
+    });
+
     return () => {
       socket.off('new_order');
       socket.off('order_updated');
+      socket.off('waiter_requested');
+      socket.off('waiter_request_resolved');
     };
   }, [socket]);
 
@@ -202,6 +240,38 @@ export default function KitchenDashboard() {
       });
     } catch (err: any) {
       alert(err.response?.data?.message || 'Failed to update order status.');
+    }
+  };
+
+  const playWaiterChime = () => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(880, audioContext.currentTime); // A5
+      osc.frequency.setValueAtTime(1320, audioContext.currentTime + 0.12); // E6
+      
+      gain.gain.setValueAtTime(0.2, audioContext.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.35);
+      
+      osc.connect(gain);
+      gain.connect(audioContext.destination);
+      
+      osc.start();
+      osc.stop(audioContext.currentTime + 0.35);
+    } catch (e) {
+      console.log('Audio chime not allowed by browser permissions yet');
+    }
+  };
+
+  const handleResolveWaiterRequest = async (requestId: string) => {
+    try {
+      await api.patch(`/orders/waiter-requests/${requestId}/resolve`);
+      setWaiterRequests((prev) => prev.filter((r) => r._id !== requestId));
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to resolve service request.');
     }
   };
 
@@ -455,6 +525,47 @@ export default function KitchenDashboard() {
 
           {/* Recent Completed Bills (Right side, takes 3 columns on desktop) */}
           <div className="lg:col-span-3 space-y-4">
+            {/* Table Service Calls Alert Queue */}
+            {waiterRequests.length > 0 && (
+              <Card className="border border-amber-500/30 bg-amber-500/5 shadow-md">
+                <CardHeader className="pb-2 pt-4 px-4">
+                  <CardTitle className="text-sm font-serif font-black flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
+                    <BellRing className="w-4 h-4 animate-bounce text-amber-600" /> Active Table Calls
+                  </CardTitle>
+                  <p className="text-[10px] text-amber-600 dark:text-amber-400/80">Customers requesting table service</p>
+                </CardHeader>
+                <CardContent className="p-4 pt-0">
+                  <div className="space-y-2.5">
+                    {waiterRequests.map((req) => (
+                      <div
+                        key={req._id}
+                        className="relative border border-amber-200 dark:border-amber-950/60 p-3 rounded-xl bg-amber-500/10 flex flex-col gap-1 hover:border-amber-300 transition-all"
+                      >
+                        <div className="pr-16">
+                          <span className="text-[9px] uppercase font-bold text-amber-700 dark:text-amber-400 font-sans">
+                            Table T-{req.tableNumber}
+                          </span>
+                          <h4 className="text-xs font-bold text-foreground font-sans mt-0.5 capitalize">
+                            {req.type.replace('_', ' ')}
+                          </h4>
+                          <span className="text-[9px] text-muted-foreground font-semibold block mt-0.5 font-sans">
+                            {getElapsedString(req.createdAt)}
+                          </span>
+                        </div>
+
+                        <button
+                          onClick={() => handleResolveWaiterRequest(req._id)}
+                          className="absolute top-3 right-3 px-2 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[10px] font-bold cursor-pointer transition-colors shadow shadow-amber-500/10 font-sans uppercase tracking-wider"
+                        >
+                          Resolve
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <Card className="border border-border/60 shadow-md">
               <CardHeader className="pb-2 pt-4 px-4">
                 <CardTitle className="text-sm font-serif font-black flex items-center gap-1.5 justify-between animate-fade-in">

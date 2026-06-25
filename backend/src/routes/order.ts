@@ -4,6 +4,7 @@ import Dish from '../models/Dish';
 import Restaurant from '../models/Restaurant';
 import Otp from '../models/Otp';
 import Bill from '../models/Bill';
+import WaiterRequest from '../models/WaiterRequest';
 import { generateBillPDF } from '../utils/pdf';
 import { protect, restrictTo, AuthRequest } from '../middleware/auth';
 
@@ -283,6 +284,114 @@ router.patch('/:id/status', protect, restrictTo('restaurant_admin', 'staff'), as
   } catch (error: any) {
     console.error('Update status error:', error);
     return res.status(500).json({ success: false, message: 'Failed to update status.', error: error.message });
+  }
+});
+
+/**
+ * @route   POST /api/orders/waiter-request
+ * @desc    Submit a table service request (Public - called by customer table menu)
+ * @access  Public
+ */
+router.post('/waiter-request', async (req, res) => {
+  try {
+    const { restaurantId, tableNumber, type } = req.body;
+
+    if (!restaurantId || !tableNumber || !type) {
+      return res.status(400).json({ success: false, message: 'All fields (restaurantId, tableNumber, type) are required.' });
+    }
+
+    const validTypes = ['call_waiter', 'request_water', 'request_bill', 'other'];
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ success: false, message: 'Invalid service request type.' });
+    }
+
+    // Save request to DB
+    const request = new WaiterRequest({
+      restaurantId,
+      tableNumber,
+      type,
+      status: 'pending',
+    });
+    await request.save();
+
+    // Broadcast to restaurant socket room
+    const io = req.app.get('io');
+    if (io) {
+      io.to(restaurantId.toString()).emit('waiter_requested', request);
+      console.log(`[Socket] Dispatched waiter_requested event to restaurant room: ${restaurantId}`);
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: 'Service request submitted successfully.',
+      data: request,
+    });
+  } catch (error: any) {
+    console.error('Waiter request submission error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to submit service request.', error: error.message });
+  }
+});
+
+/**
+ * @route   GET /api/orders/waiter-requests/active
+ * @desc    Get all active pending waiter requests for this restaurant
+ * @access  Private (Restaurant Admin / Staff)
+ */
+router.get('/waiter-requests/active', protect, restrictTo('restaurant_admin', 'staff'), async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || !req.user.restaurantId) {
+      return res.status(400).json({ success: false, message: 'User is not associated with any restaurant.' });
+    }
+
+    const requests = await WaiterRequest.find({
+      restaurantId: req.user.restaurantId,
+      status: 'pending',
+    }).sort({ createdAt: -1 });
+
+    return res.json({ success: true, count: requests.length, data: requests });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: 'Failed to retrieve active waiter requests.', error: error.message });
+  }
+});
+
+/**
+ * @route   PATCH /api/orders/waiter-requests/:id/resolve
+ * @desc    Mark a waiter request as resolved
+ * @access  Private (Restaurant Admin / Staff)
+ */
+router.patch('/waiter-requests/:id/resolve', protect, restrictTo('restaurant_admin', 'staff'), async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || !req.user.restaurantId) {
+      return res.status(400).json({ success: false, message: 'User is not associated with any restaurant.' });
+    }
+
+    const request = await WaiterRequest.findOne({
+      _id: req.params.id,
+      restaurantId: req.user.restaurantId,
+    });
+
+    if (!request) {
+      return res.status(404).json({ success: false, message: 'Service request not found.' });
+    }
+
+    request.status = 'resolved';
+    await request.save();
+
+    // Broadcast to restaurant socket room
+    const io = req.app.get('io');
+    if (io) {
+      io.to(req.user.restaurantId.toString()).emit('waiter_request_resolved', { _id: request._id });
+      console.log(`[Socket] Dispatched waiter_request_resolved event for: ${request._id}`);
+    }
+
+    return res.json({
+      success: true,
+      message: 'Service request marked as resolved.',
+      data: request,
+    });
+  } catch (error: any) {
+    console.error('Resolve waiter request error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to resolve service request.', error: error.message });
   }
 });
 

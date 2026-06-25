@@ -11,7 +11,7 @@ import ThemeToggle from '../../../../components/ThemeToggle';
 import Link from 'next/link';
 import { 
   Loader2, ShoppingBag, Search, Plus, Minus, X, Check, Coffee, 
-  Trash2, Phone, User, ShieldCheck, ChevronRight, MessageSquare 
+  Trash2, Phone, User, ShieldCheck, ChevronRight, MessageSquare, Bell
 } from 'lucide-react';
 
 interface CustomizationOption {
@@ -87,6 +87,33 @@ export default function CustomerMenuPage() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otpLoading, setOtpLoading] = useState(false); // Used for order placement loading spinner
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+
+  // Waiter Assistance States
+  const [isWaiterModalOpen, setIsWaiterModalOpen] = useState(false);
+  const [waiterRequestLoading, setWaiterRequestLoading] = useState(false);
+  const [waiterRequestSuccess, setWaiterRequestSuccess] = useState(false);
+  const [waiterRequestType, setWaiterRequestType] = useState<'call_waiter' | 'request_water' | 'request_bill' | 'other'>('call_waiter');
+
+  const handleCallWaiterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setWaiterRequestLoading(true);
+    try {
+      await api.post('/orders/waiter-request', {
+        restaurantId: restaurant?._id || cartRestaurantId,
+        tableNumber: cartTableNumber || '1',
+        type: waiterRequestType,
+      });
+      setWaiterRequestSuccess(true);
+      setTimeout(() => {
+        setIsWaiterModalOpen(false);
+        setWaiterRequestSuccess(false);
+      }, 2000);
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to submit service request.');
+    } finally {
+      setWaiterRequestLoading(false);
+    }
+  };
 
   // Categories List
   const categories = ['All', 'Coffee', 'Tea', 'Mocktails', 'Snacks', 'Breakfast', 'Lunch', 'Dinner', 'Desserts'];
@@ -314,6 +341,14 @@ export default function CustomerMenuPage() {
 
         <div className="flex items-center gap-3">
           <ThemeToggle />
+          <button
+            onClick={() => setIsWaiterModalOpen(true)}
+            className="p-2.5 bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 rounded-xl hover:bg-amber-500/20 transition-all cursor-pointer flex items-center gap-1.5 text-xs font-bold"
+            title="Call Service"
+          >
+            <Bell className="w-4 h-4 animate-pulse text-amber-500" />
+            <span className="hidden xs:inline">Call Service</span>
+          </button>
           <button
             onClick={() => setIsCartOpen(true)}
             className="relative p-2.5 bg-primary/10 text-primary border border-primary/20 rounded-xl hover:bg-primary/20 transition-all cursor-pointer"
@@ -769,6 +804,68 @@ export default function CustomerMenuPage() {
                 )}
               </Button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Call Waiter Modal Overlay */}
+      {isWaiterModalOpen && (
+        <div className="fixed inset-0 z-50 bg-stone-950/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-card text-card-foreground w-full max-w-sm rounded-2xl border border-border overflow-hidden shadow-2xl p-6 space-y-4 animate-fade-in relative">
+            <button
+              onClick={() => setIsWaiterModalOpen(false)}
+              className="absolute top-4 right-4 p-1 rounded-full bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+              disabled={waiterRequestLoading}
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="text-center pb-2">
+              <div className="w-12 h-12 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                <Bell className="w-6 h-6 text-amber-500 animate-pulse" />
+              </div>
+              <h3 className="font-serif font-bold text-base md:text-lg">Table Assistance</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">Need help at Table {cartTableNumber || '1'}?</p>
+            </div>
+
+            {waiterRequestSuccess ? (
+              <div className="bg-emerald-500/15 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs p-4 rounded-xl text-center font-semibold animate-fade-in">
+                🔔 Waiter alerted successfully!
+              </div>
+            ) : (
+              <form onSubmit={handleCallWaiterSubmit} className="space-y-4">
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  {[
+                    { type: 'call_waiter', label: '🔔 Call Waiter', desc: 'General assistance' },
+                    { type: 'request_water', label: '💧 Request Water', desc: 'Drinking water' },
+                    { type: 'request_bill', label: '📄 Request Bill', desc: 'Invoice / Check' },
+                    { type: 'other', label: '✏️ Other Help', desc: 'Any other requests' }
+                  ].map((opt) => (
+                    <button
+                      key={opt.type}
+                      type="button"
+                      onClick={() => setWaiterRequestType(opt.type as any)}
+                      className={`p-3 rounded-xl border flex flex-col items-center justify-center text-center cursor-pointer gap-1 transition-all ${
+                        waiterRequestType === opt.type
+                          ? 'border-amber-500 bg-amber-500/10 text-foreground font-semibold'
+                          : 'border-border bg-background text-muted-foreground hover:bg-secondary/40'
+                      }`}
+                    >
+                      <span className="font-bold">{opt.label}</span>
+                      <span className="text-[9px] text-muted-foreground leading-none">{opt.desc}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={waiterRequestLoading}
+                  className="w-full font-bold cursor-pointer bg-amber-600 hover:bg-amber-700 text-white"
+                >
+                  {waiterRequestLoading ? 'Alerting Waiter...' : 'Send Service Alert'}
+                </Button>
+              </form>
+            )}
           </div>
         </div>
       )}
