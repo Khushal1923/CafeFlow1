@@ -400,4 +400,120 @@ router.patch('/waiter-requests/:id/resolve', protect, restrictTo('restaurant_adm
   }
 });
 
+/**
+ * @route   POST /api/orders/:id/append
+ * @desc    Append items to an active order (Customer ordering more items)
+ * @access  Public
+ */
+router.post('/:id/append', async (req, res) => {
+  try {
+    const { items } = req.body;
+
+    if (!items || !items.length) {
+      return res.status(400).json({ success: false, message: 'Items list is required.' });
+    }
+
+    const order = await Order.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Active order not found.' });
+    }
+
+    if (order.status === 'completed' || order.status === 'cancelled') {
+      return res.status(400).json({ success: false, message: 'This order has already been finalized.' });
+    }
+
+    const restaurant = await Restaurant.findById(order.restaurantId);
+    if (!restaurant) {
+      return res.status(404).json({ success: false, message: 'Associated restaurant not found.' });
+    }
+
+    // Secure price validation from DB
+    let newSubtotal = 0;
+    const validatedNewItems = [];
+
+    for (const item of items) {
+      const dish = await Dish.findById(item.dishId);
+      if (!dish) {
+        return res.status(404).json({ success: false, message: `Dish item ${item.name} not found.` });
+      }
+
+      if (!dish.available) {
+        return res.status(400).json({ success: false, message: `Dish "${dish.name}" is currently out of stock.` });
+      }
+
+      let itemPrice = dish.price;
+      const itemCustomizations = [];
+
+      if (item.customizations && item.customizations.length > 0) {
+        for (const selectedCust of item.customizations) {
+          const dbCustGroup = dish.customizations.find(g => g.name === selectedCust.name);
+          if (dbCustGroup) {
+            const dbOption = dbCustGroup.options.find(o => o.name === selectedCust.selectedOption);
+            if (dbOption) {
+              itemCustomizations.push({
+                name: selectedCust.name,
+                selectedOption: selectedCust.selectedOption,
+                extraPrice: dbOption.extraPrice,
+              });
+              itemPrice += dbOption.extraPrice;
+            }
+          }
+        }
+      }
+
+      const itemTotal = itemPrice * item.quantity;
+      newSubtotal += itemTotal;
+
+      validatedNewItems.push({
+        dishId: dish._id,
+        name: dish.name,
+        price: dish.price,
+        quantity: item.quantity,
+        customizations: itemCustomizations,
+        specialInstructions: item.specialInstructions || '',
+      });
+    }
+
+    // Append to existing order items list
+    order.items.push(...(validatedNewItems as any));
+
+    // Recalculate values
+    order.subtotal = Number((order.subtotal + newSubtotal).toFixed(2));
+    const taxRate = restaurant.taxRate || 5;
+    order.tax = Number(((order.subtotal * taxRate) / 100).toFixed(2));
+    order.totalAmount = Number((order.subtotal + order.tax).toFixed(2));
+
+    // If order was already served or ready, move back to accepted to notify kitchen
+    if (order.status === 'served' || order.status === 'ready') {
+      order.status = 'accepted';
+    }
+
+    await order.save();
+
+    // Broadcast updates via WebSockets
+    const io = req.app.get('io');
+    if (io) {
+      // Notify tracking customer room
+      io.to(order._id.toString()).emit('order_status_updated', order);
+      // Notify restaurant room
+      io.to(order.restaurantId.toString()).emit('order_updated', order);
+      // Emit special event for highlighting new items
+      io.to(order.restaurantId.toString()).emit('order_items_appended', {
+        orderId: order._id,
+        tableNumber: order.tableNumber,
+        newItems: validatedNewItems,
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Items added to order successfully.',
+      data: order,
+    });
+  } catch (error: any) {
+    console.error('Append order error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to add items to order.', error: error.message });
+  }
+});
+
 export default router;

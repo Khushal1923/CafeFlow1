@@ -355,6 +355,42 @@ export default function CustomerMenuPage() {
     }
   };
 
+  const handleAppendToOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeOrderId) return;
+    setCheckoutError(null);
+    setOtpLoading(true);
+
+    try {
+      const orderData = {
+        items: cartItems.map((item) => ({
+          dishId: item.dishId,
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity,
+          customizations: item.customizations,
+          specialInstructions: item.specialInstructions,
+        })),
+      };
+
+      const res = await api.post(`/orders/${activeOrderId}/append`, orderData);
+      const updatedOrder = res.data.data;
+
+      // Reset cart and modals
+      clearCart();
+      setIsCheckoutOpen(false);
+      setIsCartOpen(false);
+
+      // Redirect to tracker page
+      router.push(`/r/${slug}/order-status/${updatedOrder._id}`);
+    } catch (err: any) {
+      console.error('[Append Order Failed]:', err.response?.data || err.message);
+      setCheckoutError(err.response?.data?.message || 'Failed to add items to order. Please try again.');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
   // Filter logic
   const filteredDishes = dishes.filter((dish) => {
     const matchesCategory = selectedCategory === 'All' || dish.category === selectedCategory;
@@ -811,7 +847,15 @@ export default function CustomerMenuPage() {
           <div className="bg-card text-card-foreground w-full max-w-md rounded-2xl border border-border overflow-hidden shadow-2xl p-6 space-y-5 animate-fade-in">
             <div className="flex items-center justify-between border-b border-border/50 pb-3">
               <h3 className="font-serif font-bold text-base md:text-lg flex items-center gap-1.5">
-                <ShieldCheck className="w-5 h-5 text-primary animate-pulse" /> Customer Verification
+                {activeOrderId ? (
+                  <>
+                    <Plus className="w-5 h-5 text-primary animate-pulse" /> Add to Active Order
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="w-5 h-5 text-primary animate-pulse" /> Customer Verification
+                  </>
+                )}
               </h3>
              <button
                onClick={() => {
@@ -830,61 +874,86 @@ export default function CustomerMenuPage() {
               </div>
             )}
 
-            <form onSubmit={handlePlaceOrder} className="space-y-4 text-sm">
-              <p className="text-xs text-muted-foreground">
-                Please enter your details below to place your dine-in order. We will verify your location to ensure you are at the table.
-              </p>
+            {activeOrderId ? (
+              /* Append Order Confirmation Mode */
+              <form onSubmit={handleAppendToOrder} className="space-y-5 text-sm">
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  You already have an active order in progress at Table {cartTableNumber || '1'}. These additional items will be added directly to your existing bill without re-verifying your details.
+                </p>
 
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide">
-                    Your Full Name
-                  </label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-                    <input
-                      type="text"
-                      required
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      placeholder="John Doe"
-                      className="w-full text-xs bg-secondary/50 text-foreground border border-border rounded-xl pl-9 pr-4 py-2.5 outline-none focus:ring-2 focus:ring-primary focus:bg-background transition-all"
-                    />
+                <div className="bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-400 p-3.5 rounded-xl text-xs flex gap-2">
+                  <div className="font-bold shrink-0">Note:</div>
+                  <div>Your items will be merged into a single combined bill when you check out and settle.</div>
+                </div>
+
+                <Button type="submit" disabled={otpLoading} className="w-full cursor-pointer font-bold gap-2 bg-amber-600 hover:bg-amber-700 text-white">
+                  {otpLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" /> Adding to Bill...
+                    </>
+                  ) : (
+                    <>Add to Table Bill (Rs. {total.toFixed(2)})</>
+                  )}
+                </Button>
+              </form>
+            ) : (
+              /* Regular Verification Mode */
+              <form onSubmit={handlePlaceOrder} className="space-y-4 text-sm">
+                <p className="text-xs text-muted-foreground">
+                  Please enter your details below to place your dine-in order. We will verify your location to ensure you are at the table.
+                </p>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide">
+                      Your Full Name
+                    </label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
+                      <input
+                        type="text"
+                        required
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        placeholder="John Doe"
+                        className="w-full text-xs bg-secondary/50 text-foreground border border-border rounded-xl pl-9 pr-4 py-2.5 outline-none focus:ring-2 focus:ring-primary focus:bg-background transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide">
+                      Mobile Number
+                    </label>
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
+                      <input
+                        type="tel"
+                        required
+                        value={phoneNumber}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '');
+                          setPhoneNumber(val);
+                        }}
+                        maxLength={10}
+                        placeholder="e.g. 9876543210"
+                        className="w-full text-xs bg-secondary/50 text-foreground border border-border rounded-xl pl-9 pr-4 py-2.5 outline-none focus:ring-2 focus:ring-primary focus:bg-background transition-all"
+                      />
+                    </div>
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide">
-                    Mobile Number
-                  </label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-                    <input
-                      type="tel"
-                      required
-                      value={phoneNumber}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/\D/g, '');
-                        setPhoneNumber(val);
-                      }}
-                      maxLength={10}
-                      placeholder="e.g. 9876543210"
-                      className="w-full text-xs bg-secondary/50 text-foreground border border-border rounded-xl pl-9 pr-4 py-2.5 outline-none focus:ring-2 focus:ring-primary focus:bg-background transition-all"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <Button type="submit" disabled={otpLoading} className="w-full mt-2 cursor-pointer font-bold gap-2">
-                {otpLoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" /> Verifying & Placing Order...
-                  </>
-                ) : (
-                  'Place Dine-in Order'
-                )}
-              </Button>
-            </form>
+                <Button type="submit" disabled={otpLoading} className="w-full mt-2 cursor-pointer font-bold gap-2">
+                  {otpLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" /> Verifying & Placing Order...
+                    </>
+                  ) : (
+                    'Place Dine-in Order'
+                  )}
+                </Button>
+              </form>
+            )}
           </div>
         </div>
       )}

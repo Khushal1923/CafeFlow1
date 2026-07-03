@@ -11,7 +11,7 @@ import { Badge } from '../../components/ui/badge';
 import ThemeToggle from '../../components/ThemeToggle';
 import { 
   Loader2, LogOut, Clock, ChefHat, CheckSquare, BellRing, 
-  Sparkles, Coffee, AlertTriangle, Play, CheckCircle2, X 
+  Sparkles, Coffee, AlertTriangle, Play, CheckCircle2, X, Plus
 } from 'lucide-react';
 
 interface Bill {
@@ -74,6 +74,9 @@ export default function KitchenDashboard() {
 
   // Waiter active requests
   const [waiterRequests, setWaiterRequests] = useState<WaiterRequest[]>([]);
+
+  // Track order IDs that recently appended items (for visual highlight)
+  const [recentlyAppendedOrderIds, setRecentlyAppendedOrderIds] = useState<string[]>([]);
 
   // Bind to socket updates for this restaurant room
   const socket = useSocket('restaurant', restaurantId);
@@ -191,11 +194,24 @@ export default function KitchenDashboard() {
       setWaiterRequests((prev) => prev.filter((r) => r._id !== payload._id));
     });
 
+    socket.on('order_items_appended', (data: { orderId: string; tableNumber: string; newItems: any[] }) => {
+      console.log('[Kitchen Socket] Items appended to order:', data.orderId);
+      playChime();
+      setRecentlyAppendedOrderIds((prev) => {
+        if (prev.includes(data.orderId)) return prev;
+        return [...prev, data.orderId];
+      });
+      setTimeout(() => {
+        setRecentlyAppendedOrderIds((prev) => prev.filter((id) => id !== data.orderId));
+      }, 10000);
+    });
+
     return () => {
       socket.off('new_order');
       socket.off('order_updated');
       socket.off('waiter_requested');
       socket.off('waiter_request_resolved');
+      socket.off('order_items_appended');
     };
   }, [socket]);
 
@@ -396,7 +412,14 @@ export default function KitchenDashboard() {
               /* Active orders card grid */
               <div className="grid sm:grid-cols-2 gap-6">
                 {orders.map((order) => (
-                  <Card key={order._id} className="border border-border/70 hover:border-primary/30 flex flex-col justify-between shadow shadow-stone-150/40 relative overflow-hidden">
+                  <Card 
+                    key={order._id} 
+                    className={`flex flex-col justify-between shadow relative overflow-hidden transition-all duration-300 ${
+                      recentlyAppendedOrderIds.includes(order._id)
+                        ? 'border-2 border-amber-500 shadow-lg shadow-amber-500/10 scale-[1.01] bg-amber-500/5 animate-pulse'
+                        : 'border border-border/70 hover:border-primary/30 shadow-stone-150/40'
+                    }`}
+                  >
                     {/* Visual Status Indicator Strip */}
                     <div className={`h-1.5 w-full absolute top-0 left-0 ${
                       order.status === 'received' ? 'bg-red-500 animate-pulse' :
@@ -404,6 +427,12 @@ export default function KitchenDashboard() {
                       order.status === 'preparing' ? 'bg-amber-500' :
                       order.status === 'ready' ? 'bg-emerald-500 animate-pulse' : 'bg-stone-500'
                     }`} />
+
+                    {recentlyAppendedOrderIds.includes(order._id) && (
+                      <div className="bg-amber-500 text-white text-[9px] uppercase font-black text-center py-1 tracking-widest flex items-center justify-center gap-1.5 font-sans">
+                        <Plus className="w-3 h-3 shrink-0" /> Added More Items!
+                      </div>
+                    )}
 
                     <CardHeader className="pb-2 pt-5">
                       <div className="flex justify-between items-start">
