@@ -10,7 +10,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import ThemeToggle from '../../../../../components/ThemeToggle';
 import { 
   Loader2, Coffee, CheckCircle2, ChefHat, Bell, Sparkles, 
-  Receipt, Download, Printer, ArrowLeft, MessageSquare, AlertCircle
+  Receipt, Download, Printer, ArrowLeft, MessageSquare, AlertCircle, Plus
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -362,6 +362,18 @@ export default function OrderStatusPage() {
             <span>Placed: {new Date(order.createdAt).toLocaleTimeString()}</span>
           </CardFooter>
         </Card>
+
+        {/* Order More Items CTA Button */}
+        {order.status !== 'completed' && order.status !== 'cancelled' && (
+          <div className="text-center pt-2">
+            <Link 
+              href={`/r/${slug}/menu`} 
+              className="inline-flex items-center justify-center gap-1.5 px-6 py-3 w-full bg-amber-600 hover:bg-amber-700 text-white rounded-2xl text-sm font-bold shadow-lg shadow-amber-500/10 cursor-pointer transition-all hover:scale-[1.01]"
+            >
+              <Plus className="w-4.5 h-4.5" /> Order More Items
+            </Link>
+          </div>
+        )}
       </main>
     </div>
   );

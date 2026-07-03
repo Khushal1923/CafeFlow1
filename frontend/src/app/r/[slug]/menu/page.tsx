@@ -94,6 +94,16 @@ export default function CustomerMenuPage() {
   const [waiterRequestSuccess, setWaiterRequestSuccess] = useState(false);
   const [waiterRequestType, setWaiterRequestType] = useState<'call_waiter' | 'request_water' | 'request_bill' | 'other'>('call_waiter');
 
+  // Active Order Persistence States
+  const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
+  const [activeOrderStatus, setActiveOrderStatus] = useState<string | null>(null);
+
+  const handleDismissActiveOrderBanner = () => {
+    localStorage.removeItem(`active_order_${slug}`);
+    setActiveOrderId(null);
+    setActiveOrderStatus(null);
+  };
+
   const handleCallWaiterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setWaiterRequestLoading(true);
@@ -117,6 +127,29 @@ export default function CustomerMenuPage() {
 
   // Categories List
   const categories = ['All', 'Coffee', 'Tea', 'Mocktails', 'Snacks', 'Breakfast', 'Lunch', 'Dinner', 'Desserts'];
+
+  // Check for active order in localStorage on mount
+  useEffect(() => {
+    const storedOrderId = localStorage.getItem(`active_order_${slug}`);
+    if (storedOrderId) {
+      const checkOrderStatus = async () => {
+        try {
+          const res = await api.get(`/orders/${storedOrderId}`);
+          const order = res.data.data;
+          if (order.status === 'cancelled') {
+            localStorage.removeItem(`active_order_${slug}`);
+          } else {
+            setActiveOrderId(storedOrderId);
+            setActiveOrderStatus(order.status);
+          }
+        } catch (e) {
+          console.error('Failed to check active order status:', e);
+          localStorage.removeItem(`active_order_${slug}`);
+        }
+      };
+      checkOrderStatus();
+    }
+  }, [slug]);
 
   // Load Dishes & Restaurant Tenant details
   useEffect(() => {
@@ -290,6 +323,9 @@ export default function CustomerMenuPage() {
         setIsCheckoutOpen(false);
         setIsCartOpen(false);
 
+        // Store active order ID in localStorage for tracking persistence
+        localStorage.setItem(`active_order_${slug}`, newOrder._id);
+
         // Redirect to status tracker
         router.push(`/r/${slug}/order-status/${newOrder._id}`);
       } catch (err: any) {
@@ -369,6 +405,40 @@ export default function CustomerMenuPage() {
           </button>
         </div>
       </header>
+
+      {/* Active Order Banner Alert */}
+      {activeOrderId && (
+        <div className={`px-4 py-3 flex items-center justify-between shadow-sm border-b text-xs font-semibold animate-fade-in ${
+          activeOrderStatus === 'completed'
+            ? 'bg-emerald-600/10 text-emerald-800 dark:text-emerald-400 border-emerald-500/20'
+            : 'bg-amber-500/10 text-amber-800 dark:text-amber-400 border-amber-500/20'
+        }`}>
+          <Link 
+            href={`/r/${slug}/order-status/${activeOrderId}`}
+            className="flex-1 flex items-center gap-2 hover:underline cursor-pointer"
+          >
+            {activeOrderStatus === 'completed' ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <span>📄 Your bill is ready! Click here to view & download invoice.</span>
+              </>
+            ) : (
+              <>
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                <span>🔔 You have an active order in progress ({activeOrderStatus}). Tap to track & view bill.</span>
+              </>
+            )}
+          </Link>
+          
+          <button
+            onClick={handleDismissActiveOrderBanner}
+            className="p-1 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary/50 cursor-pointer transition-colors"
+            title="Dismiss"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Hero Banner Intro */}
       <section className="bg-stone-900 text-stone-100 py-8 px-4 text-center relative overflow-hidden">
