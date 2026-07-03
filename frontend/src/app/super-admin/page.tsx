@@ -23,6 +23,16 @@ interface Restaurant {
   gstNumber?: string;
   taxRate: number;
   status: 'active' | 'suspended';
+  theme?: {
+    primaryColor?: string;
+    darkMode?: boolean;
+  };
+  location?: {
+    latitude?: number;
+    longitude?: number;
+  };
+  instagramUrl?: string;
+  googleMapsUrl?: string;
   createdAt: string;
 }
 
@@ -79,6 +89,71 @@ export default function SuperAdminPage() {
   const handleLogout = () => {
     clearAuth();
     router.push('/login');
+  };
+
+  const [editingRestaurant, setEditingRestaurant] = useState<Restaurant | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    address: '',
+    contact: '',
+    gstNumber: '',
+    taxRate: 5,
+    primaryColor: '#d97706',
+    latitude: '',
+    longitude: '',
+    instagramUrl: '',
+    googleMapsUrl: '',
+  });
+
+  const handleOpenEditModal = (rest: Restaurant) => {
+    setEditingRestaurant(rest);
+    setEditForm({
+      name: rest.name,
+      address: rest.address,
+      contact: rest.contact,
+      gstNumber: rest.gstNumber || '',
+      taxRate: rest.taxRate,
+      primaryColor: rest.theme?.primaryColor || '#d97706',
+      latitude: rest.location?.latitude?.toString() || '',
+      longitude: rest.location?.longitude?.toString() || '',
+      instagramUrl: rest.instagramUrl || '',
+      googleMapsUrl: rest.googleMapsUrl || '',
+    });
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRestaurant) return;
+
+    try {
+      const payload = {
+        name: editForm.name,
+        address: editForm.address,
+        contact: editForm.contact,
+        gstNumber: editForm.gstNumber,
+        taxRate: Number(editForm.taxRate),
+        theme: {
+          primaryColor: editForm.primaryColor,
+        },
+        location: {
+          latitude: editForm.latitude ? Number(editForm.latitude) : undefined,
+          longitude: editForm.longitude ? Number(editForm.longitude) : undefined,
+        },
+        instagramUrl: editForm.instagramUrl,
+        googleMapsUrl: editForm.googleMapsUrl,
+      };
+
+      const res = await api.patch(`/restaurants/${editingRestaurant._id}`, payload);
+      if (res.data.success) {
+        const updatedRest = res.data.data;
+        setRestaurants((prev) =>
+          prev.map((r) => (r._id === editingRestaurant._id ? updatedRest : r))
+        );
+        setEditingRestaurant(null);
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to update restaurant details.');
+    }
   };
 
   if (loading) {
@@ -195,14 +270,22 @@ export default function SuperAdminPage() {
                           {rest.status}
                         </Badge>
                       </td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleOpenEditModal(rest)}
+                          className="text-xs h-8 cursor-pointer font-bold px-3 border-border hover:bg-secondary transition-colors"
+                        >
+                          Edit Profile
+                        </Button>
                         <Button
                           size="sm"
                           variant={rest.status === 'active' ? 'destructive' : 'outline'}
                           onClick={() => handleToggleStatus(rest._id, rest.status)}
                           className="text-xs h-8 cursor-pointer font-bold px-3.5"
                         >
-                          {rest.status === 'active' ? 'Suspend Tenant' : 'Activate Tenant'}
+                          {rest.status === 'active' ? 'Suspend' : 'Activate'}
                         </Button>
                       </td>
                     </tr>
@@ -212,6 +295,176 @@ export default function SuperAdminPage() {
             </div>
           )}
         </Card>
+
+        {editingRestaurant && (
+          <div className="fixed inset-0 z-50 bg-stone-950/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-card text-card-foreground w-full max-w-lg rounded-2xl border border-border overflow-hidden shadow-2xl p-6 space-y-4 animate-fade-in max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between border-b border-border/50 pb-3">
+                <h3 className="font-serif font-bold text-base md:text-lg">
+                  Customize Cafe Website: {editingRestaurant.name}
+                </h3>
+                <button
+                  onClick={() => setEditingRestaurant(null)}
+                  className="p-1 rounded-full bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveEdit} className="space-y-4 text-xs font-semibold">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-muted-foreground mb-1">Cafe Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={editForm.name}
+                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                      className="w-full bg-secondary/40 border border-border rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-muted-foreground mb-1">Contact Phone</label>
+                    <input
+                      type="text"
+                      required
+                      value={editForm.contact}
+                      onChange={(e) => setEditForm({ ...editForm, contact: e.target.value })}
+                      className="w-full bg-secondary/40 border border-border rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-muted-foreground mb-1">Address Location</label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.address}
+                    onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                    className="w-full bg-secondary/40 border border-border rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="sm:col-span-2">
+                    <label className="block text-[10px] uppercase font-bold text-muted-foreground mb-1">GST/VAT Number (Optional)</label>
+                    <input
+                      type="text"
+                      value={editForm.gstNumber}
+                      onChange={(e) => setEditForm({ ...editForm, gstNumber: e.target.value })}
+                      placeholder="e.g. 22AAAAA1111A1Z1"
+                      className="w-full bg-secondary/40 border border-border rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-muted-foreground mb-1">Tax Rate (%)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      required
+                      value={editForm.taxRate}
+                      onChange={(e) => setEditForm({ ...editForm, taxRate: Number(e.target.value) })}
+                      className="w-full bg-secondary/40 border border-border rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+
+                <div className="border-t border-border/40 pt-3">
+                  <h4 className="text-xs font-bold text-foreground mb-3 uppercase tracking-wider text-[10px]">Branding & Aesthetics</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold text-muted-foreground mb-1">Primary Website Color</label>
+                      <div className="flex gap-2 items-center">
+                        <input
+                          type="color"
+                          value={editForm.primaryColor}
+                          onChange={(e) => setEditForm({ ...editForm, primaryColor: e.target.value })}
+                          className="w-10 h-8 border border-border rounded cursor-pointer shrink-0"
+                        />
+                        <input
+                          type="text"
+                          value={editForm.primaryColor}
+                          onChange={(e) => setEditForm({ ...editForm, primaryColor: e.target.value })}
+                          className="w-full bg-secondary/40 border border-border rounded-lg px-3 py-1.5 font-mono text-center uppercase"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-border/40 pt-3">
+                  <h4 className="text-xs font-bold text-foreground mb-3 uppercase tracking-wider text-[10px]">Social Links & Coordinates</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold text-muted-foreground mb-1">Instagram URL</label>
+                      <input
+                        type="url"
+                        value={editForm.instagramUrl}
+                        onChange={(e) => setEditForm({ ...editForm, instagramUrl: e.target.value })}
+                        placeholder="https://instagram.com/cafe"
+                        className="w-full bg-secondary/40 border border-border rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold text-muted-foreground mb-1">Google Maps URL</label>
+                      <input
+                        type="url"
+                        value={editForm.googleMapsUrl}
+                        onChange={(e) => setEditForm({ ...editForm, googleMapsUrl: e.target.value })}
+                        placeholder="https://maps.google.com/..."
+                        className="w-full bg-secondary/40 border border-border rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold text-muted-foreground mb-1">Latitude (Geofencing)</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={editForm.latitude}
+                        onChange={(e) => setEditForm({ ...editForm, latitude: e.target.value })}
+                        placeholder="e.g. 28.6139"
+                        className="w-full bg-secondary/40 border border-border rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold text-muted-foreground mb-1">Longitude (Geofencing)</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={editForm.longitude}
+                        onChange={(e) => setEditForm({ ...editForm, longitude: e.target.value })}
+                        placeholder="e.g. 77.2090"
+                        className="w-full bg-secondary/40 border border-border rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-border/40 pt-4 flex justify-end gap-3.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setEditingRestaurant(null)}
+                    className="cursor-pointer font-bold px-4 text-xs h-9"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="cursor-pointer font-bold px-5 text-xs h-9"
+                  >
+                    Save Customizations
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
