@@ -43,7 +43,15 @@ interface Restaurant {
   name: string;
   slug: string;
   logo?: string;
+  address: string;
+  contact: string;
   taxRate: number;
+  theme?: {
+    primaryColor?: string;
+    darkMode?: boolean;
+  };
+  instagramUrl?: string;
+  googleMapsUrl?: string;
 }
 
 export default function CustomerMenuPage() {
@@ -405,12 +413,12 @@ export default function CustomerMenuPage() {
     <div className="bg-background text-foreground min-h-screen pb-24 relative">
       {/* Dynamic theme style overrides */}
       {restaurant.theme?.primaryColor && (
-        <style>{`
-          :root {
+        <style dangerouslySetInnerHTML={{ __html: `
+          :root, .dark {
             --primary: ${restaurant.theme.primaryColor} !important;
             --ring: ${restaurant.theme.primaryColor} !important;
           }
-        `}</style>
+        ` }} />
       )}
       {/* Header Bar */}
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-border/50 px-4 py-3 flex items-center justify-between">
