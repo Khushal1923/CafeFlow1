@@ -16,8 +16,6 @@ export interface IRestaurant extends Document {
     latitude: number;
     longitude: number;
   };
-  instagramUrl?: string;
-  googleMapsUrl?: string;
   status: 'active' | 'suspended';
   createdAt: Date;
   updatedAt: Date;
@@ -40,8 +38,6 @@ const RestaurantSchema: Schema = new Schema(
       latitude: { type: Number },
       longitude: { type: Number },
     },
-    instagramUrl: { type: String },
-    googleMapsUrl: { type: String },
     status: { type: String, enum: ['active', 'suspended'], default: 'active' },
   },
   { timestamps: true }

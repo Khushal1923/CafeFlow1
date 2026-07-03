@@ -73,7 +73,7 @@ router.patch('/my-restaurant', protect, restrictTo('restaurant_admin'), async (r
       return res.status(400).json({ success: false, message: 'User is not associated with any restaurant.' });
     }
 
-    const { name, logo, address, contact, gstNumber, taxRate, theme, location, instagramUrl, googleMapsUrl } = req.body;
+    const { name, logo, address, contact, gstNumber, taxRate, theme, location } = req.body;
 
     const updatedFields: any = {};
     if (name) updatedFields.name = name;
@@ -82,8 +82,6 @@ router.patch('/my-restaurant', protect, restrictTo('restaurant_admin'), async (r
     if (contact) updatedFields.contact = contact;
     if (gstNumber !== undefined) updatedFields.gstNumber = gstNumber;
     if (taxRate !== undefined) updatedFields.taxRate = Number(taxRate);
-    if (instagramUrl !== undefined) updatedFields.instagramUrl = instagramUrl;
-    if (googleMapsUrl !== undefined) updatedFields.googleMapsUrl = googleMapsUrl;
     if (theme) {
       updatedFields.theme = {
         primaryColor: theme.primaryColor || '#d97706',
@@ -138,53 +136,6 @@ router.patch('/:id/status', protect, restrictTo('super_admin'), async (req: Auth
     return res.json({ success: true, message: `Restaurant is now ${status}.`, data: restaurant });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: 'Failed to update status.', error: error.message });
-  }
-});
-
-/**
- * @route   PATCH /api/restaurants/:id
- * @desc    Update any restaurant details
- * @access  Private (Super Admin only)
- */
-router.patch('/:id', protect, restrictTo('super_admin'), async (req: AuthRequest, res: Response) => {
-  try {
-    const { name, logo, address, contact, gstNumber, taxRate, theme, location, instagramUrl, googleMapsUrl } = req.body;
-
-    const updatedFields: any = {};
-    if (name) updatedFields.name = name;
-    if (logo !== undefined) updatedFields.logo = logo;
-    if (address) updatedFields.address = address;
-    if (contact) updatedFields.contact = contact;
-    if (gstNumber !== undefined) updatedFields.gstNumber = gstNumber;
-    if (taxRate !== undefined) updatedFields.taxRate = Number(taxRate);
-    if (instagramUrl !== undefined) updatedFields.instagramUrl = instagramUrl;
-    if (googleMapsUrl !== undefined) updatedFields.googleMapsUrl = googleMapsUrl;
-    if (theme) {
-      updatedFields.theme = {
-        primaryColor: theme.primaryColor || '#d97706',
-        darkMode: theme.darkMode ?? false,
-      };
-    }
-    if (location) {
-      updatedFields.location = {
-        latitude: Number(location.latitude),
-        longitude: Number(location.longitude),
-      };
-    }
-
-    const restaurant = await Restaurant.findByIdAndUpdate(
-      req.params.id,
-      { $set: updatedFields },
-      { new: true, runValidators: true }
-    );
-
-    if (!restaurant) {
-      return res.status(404).json({ success: false, message: 'Restaurant not found.' });
-    }
-
-    return res.json({ success: true, message: 'Restaurant updated successfully.', data: restaurant });
-  } catch (error: any) {
-    return res.status(500).json({ success: false, message: 'Failed to update restaurant.', error: error.message });
   }
 });
 

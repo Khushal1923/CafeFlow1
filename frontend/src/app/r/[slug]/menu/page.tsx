@@ -11,8 +11,7 @@ import ThemeToggle from '../../../../components/ThemeToggle';
 import Link from 'next/link';
 import { 
   Loader2, ShoppingBag, Search, Plus, Minus, X, Check, Coffee, 
-  Trash2, Phone, User, ShieldCheck, ChevronRight, MessageSquare, Bell,
-  MapPin
+  Trash2, Phone, User, ShieldCheck, ChevronRight, MessageSquare, Bell
 } from 'lucide-react';
 
 interface CustomizationOption {
@@ -43,15 +42,7 @@ interface Restaurant {
   name: string;
   slug: string;
   logo?: string;
-  address: string;
-  contact: string;
   taxRate: number;
-  theme?: {
-    primaryColor?: string;
-    darkMode?: boolean;
-  };
-  instagramUrl?: string;
-  googleMapsUrl?: string;
 }
 
 export default function CustomerMenuPage() {
@@ -411,15 +402,6 @@ export default function CustomerMenuPage() {
 
   return (
     <div className="bg-background text-foreground min-h-screen pb-24 relative">
-      {/* Dynamic theme style overrides */}
-      {restaurant.theme?.primaryColor && (
-        <style dangerouslySetInnerHTML={{ __html: `
-          :root, .dark {
-            --primary: ${restaurant.theme.primaryColor} !important;
-            --ring: ${restaurant.theme.primaryColor} !important;
-          }
-        ` }} />
-      )}
       {/* Header Bar */}
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-border/50 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -618,49 +600,6 @@ export default function CustomerMenuPage() {
             ))}
           </div>
         )}
-        {/* Restaurant Info Footer */}
-        <footer className="mt-12 border-t border-border/50 pt-8 pb-6 text-center space-y-4 max-w-md mx-auto">
-          <div className="space-y-1">
-            <h4 className="font-serif font-black text-sm text-foreground">{restaurant.name}</h4>
-            <p className="text-[11px] text-muted-foreground font-semibold px-4 leading-normal">{restaurant.address}</p>
-            <p className="text-[10px] text-muted-foreground font-medium">Contact: {restaurant.contact}</p>
-          </div>
-
-          {(restaurant.instagramUrl || restaurant.googleMapsUrl) && (
-            <div className="flex justify-center items-center gap-3">
-              {restaurant.instagramUrl && (
-                <a
-                  href={restaurant.instagramUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-8 h-8 rounded-xl bg-secondary/80 text-muted-foreground hover:text-primary hover:bg-primary/10 flex items-center justify-center transition-colors cursor-pointer"
-                  title="Follow us on Instagram"
-                >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
-                    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
-                    <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
-                  </svg>
-                </a>
-              )}
-              {restaurant.googleMapsUrl && (
-                <a
-                  href={restaurant.googleMapsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-8 h-8 rounded-xl bg-secondary/80 text-muted-foreground hover:text-primary hover:bg-primary/10 flex items-center justify-center transition-colors cursor-pointer"
-                  title="Find us on Google Maps"
-                >
-                  <MapPin className="w-4 h-4" />
-                </a>
-              )}
-            </div>
-          )}
-          
-          <div className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider">
-            Powered by CafeFlow
-          </div>
-        </footer>
       </main>
 
       {/* Floating Bottom Cart Bar */}
