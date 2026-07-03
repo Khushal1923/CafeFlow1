@@ -256,12 +256,19 @@ export default function CustomerMenuPage() {
       return;
     }
 
+    const cleanedPhone = phoneNumber.replace(/\D/g, '');
+    if (cleanedPhone.length !== 10) {
+      setCheckoutError('Mobile number must be exactly 10 digits.');
+      setOtpLoading(false);
+      return;
+    }
+
     const placeOrderWithCoords = async (latitude?: number, longitude?: number) => {
       try {
         const orderData = {
           restaurantId: restaurant._id,
           customerName,
-          phoneNumber,
+          phoneNumber: cleanedPhone,
           tableNumber: cartTableNumber || '1',
           items: cartItems.map((item) => ({
             dishId: item.dishId,
@@ -786,7 +793,11 @@ export default function CustomerMenuPage() {
                       type="tel"
                       required
                       value={phoneNumber}
-                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '');
+                        setPhoneNumber(val);
+                      }}
+                      maxLength={10}
                       placeholder="e.g. 9876543210"
                       className="w-full text-xs bg-secondary/50 text-foreground border border-border rounded-xl pl-9 pr-4 py-2.5 outline-none focus:ring-2 focus:ring-primary focus:bg-background transition-all"
                     />

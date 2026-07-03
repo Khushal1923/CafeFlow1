@@ -53,6 +53,11 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ success: false, message: 'All order details are required.' });
     }
 
+    const cleanedPhone = phoneNumber.replace(/\D/g, '');
+    if (cleanedPhone.length !== 10) {
+      return res.status(400).json({ success: false, message: 'Mobile number must be exactly 10 digits.' });
+    }
+
     // 1. Fetch Restaurant configurations
     const restaurant = await Restaurant.findById(restaurantId);
     if (!restaurant) {
@@ -146,7 +151,7 @@ router.post('/', async (req, res) => {
     const order = new Order({
       restaurantId,
       customerName,
-      phoneNumber: phoneNumber.trim(),
+      phoneNumber: cleanedPhone,
       tableNumber,
       items: validatedItems,
       status: 'received',
@@ -157,7 +162,7 @@ router.post('/', async (req, res) => {
     await order.save();
 
     // 5. Consume/delete OTP token to prevent reuse
-    await Otp.deleteOne({ phoneNumber: phoneNumber.trim() });
+    await Otp.deleteOne({ phoneNumber: cleanedPhone });
 
     // 6. Broadcast via Socket.io
     const io = req.app.get('io');
