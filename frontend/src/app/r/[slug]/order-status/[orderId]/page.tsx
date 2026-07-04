@@ -68,6 +68,7 @@ export default function OrderStatusPage() {
   const [bill, setBill] = useState<Bill | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
 
   // Initialize socket listener for this order room
   const socket = useSocket('order', orderId);
@@ -189,8 +190,6 @@ export default function OrderStatusPage() {
     { label: 'Ready', desc: 'Awaiting server', icon: Bell },
     { label: 'Served', desc: 'Dishes served', icon: Coffee },
   ];
-
-  const [paymentLoading, setPaymentLoading] = useState(false);
 
   const handleUPIPayClick = async () => {
     if (!bill || !bill.restaurantId?.paymentSettings?.upiId) return;
