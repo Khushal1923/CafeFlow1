@@ -73,7 +73,7 @@ router.patch('/my-restaurant', protect, restrictTo('restaurant_admin'), async (r
       return res.status(400).json({ success: false, message: 'User is not associated with any restaurant.' });
     }
 
-    const { name, logo, address, contact, gstNumber, taxRate, theme, location } = req.body;
+    const { name, logo, address, contact, gstNumber, taxRate, theme, location, paymentSettings } = req.body;
 
     const updatedFields: any = {};
     if (name) updatedFields.name = name;
@@ -92,6 +92,11 @@ router.patch('/my-restaurant', protect, restrictTo('restaurant_admin'), async (r
       updatedFields.location = {
         latitude: Number(location.latitude),
         longitude: Number(location.longitude),
+      };
+    }
+    if (paymentSettings) {
+      updatedFields.paymentSettings = {
+        upiId: paymentSettings.upiId || '',
       };
     }
 

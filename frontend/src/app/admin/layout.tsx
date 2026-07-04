@@ -6,7 +6,7 @@ import { useAuthStore } from '../../store/authStore';
 import ThemeToggle from '../../components/ThemeToggle';
 import { 
   Loader2, LayoutDashboard, UtensilsCrossed, Tablet, Users, 
-  ChefHat, LogOut, Coffee, Menu, X 
+  ChefHat, LogOut, Coffee, Menu, X, Settings
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -44,6 +44,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { label: 'Menu Dishes', href: '/admin/menu', icon: UtensilsCrossed },
     { label: 'Tables & QRs', href: '/admin/tables', icon: Tablet },
     { label: 'Staff Roster', href: '/admin/staff', icon: Users },
+    { label: 'Cafe Settings', href: '/admin/settings', icon: Settings },
   ];
 
   return (
