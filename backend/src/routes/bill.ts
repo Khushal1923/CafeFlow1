@@ -103,9 +103,13 @@ router.post('/:id/pay/upi-intent', async (req, res) => {
 
     // Broadcast update via socket so kitchen panel highlights it
     const io = req.app.get('io');
+    const populatedBill = await Bill.findById(bill._id)
+      .populate('orderId')
+      .populate('restaurantId', 'name address contact gstNumber paymentSettings');
+
     if (io) {
       // Notify tracking customer room
-      io.to(bill.orderId.toString()).emit('bill_status_updated', bill);
+      io.to(bill.orderId.toString()).emit('bill_status_updated', populatedBill);
       // Notify restaurant room to draw kitchen alert
       io.to(bill.restaurantId.toString()).emit('bill_payment_verifying', {
         billId: bill._id,
@@ -115,10 +119,56 @@ router.post('/:id/pay/upi-intent', async (req, res) => {
       });
     }
 
-    return res.json({ success: true, message: 'Payment marked as verifying. Waiting for cashier approval.', data: bill });
+    return res.json({ success: true, message: 'Payment marked as verifying. Waiting for cashier approval.', data: populatedBill });
   } catch (error: any) {
     console.error('UPI payment intent error:', error);
     return res.status(500).json({ success: false, message: 'Failed to register UPI intent.', error: error.message });
+  }
+});
+
+/**
+ * @route   POST /api/bills/:id/pay/cash-intent
+ * @desc    Customer states they will pay via cash; sets status to "verifying"
+ * @access  Public
+ */
+router.post('/:id/pay/cash-intent', async (req, res) => {
+  try {
+    const bill = await Bill.findById(req.params.id);
+    if (!bill) {
+      return res.status(404).json({ success: false, message: 'Bill not found.' });
+    }
+
+    if (bill.paymentStatus === 'paid') {
+      return res.status(400).json({ success: false, message: 'This bill has already been settled.' });
+    }
+
+    bill.paymentStatus = 'verifying';
+    bill.paymentMethod = 'cash';
+    await bill.save();
+
+    // Broadcast update via socket so kitchen panel highlights it
+    const io = req.app.get('io');
+    const populatedBill = await Bill.findById(bill._id)
+      .populate('orderId')
+      .populate('restaurantId', 'name address contact gstNumber paymentSettings');
+
+    if (io) {
+      // Notify tracking customer room
+      io.to(bill.orderId.toString()).emit('bill_status_updated', populatedBill);
+      // Notify restaurant room to draw kitchen alert
+      io.to(bill.restaurantId.toString()).emit('bill_payment_verifying', {
+        billId: bill._id,
+        billNumber: bill.billNumber,
+        tableNumber: req.body.tableNumber || 'N/A',
+        totalAmount: bill.totalAmount,
+        paymentMethod: 'cash',
+      });
+    }
+
+    return res.json({ success: true, message: 'Payment marked as verifying. Please pay cash at the counter.', data: populatedBill });
+  } catch (error: any) {
+    console.error('Cash payment intent error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to register cash intent.', error: error.message });
   }
 });
 
@@ -142,8 +192,12 @@ router.post('/:id/pay/approve', protect, restrictTo('restaurant_admin', 'staff')
 
     // Broadcast update via socket
     const io = req.app.get('io');
+    const populatedBill = await Bill.findById(bill._id)
+      .populate('orderId')
+      .populate('restaurantId', 'name address contact gstNumber paymentSettings');
+
     if (io) {
-      io.to(bill.orderId.toString()).emit('bill_status_updated', bill);
+      io.to(bill.orderId.toString()).emit('bill_status_updated', populatedBill);
       io.to(bill.restaurantId.toString()).emit('bill_payment_approved', { billId: bill._id });
       // Complete order as well if not already completed
       const order = await Order.findById(bill.orderId);
@@ -154,7 +208,7 @@ router.post('/:id/pay/approve', protect, restrictTo('restaurant_admin', 'staff')
       }
     }
 
-    return res.json({ success: true, message: 'Payment approved successfully.', data: bill });
+    return res.json({ success: true, message: 'Payment approved successfully.', data: populatedBill });
   } catch (error: any) {
     console.error('Approve payment error:', error);
     return res.status(500).json({ success: false, message: 'Failed to approve payment.', error: error.message });

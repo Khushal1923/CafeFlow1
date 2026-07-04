@@ -11,7 +11,7 @@ import ThemeToggle from '../../../../../components/ThemeToggle';
 import { 
   Loader2, Coffee, CheckCircle2, ChefHat, Bell, Sparkles, 
   Receipt, Download, Printer, ArrowLeft, MessageSquare, AlertCircle, Plus,
-  Smartphone
+  Smartphone, Coins
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -191,6 +191,28 @@ export default function OrderStatusPage() {
     { label: 'Served', desc: 'Dishes served', icon: Coffee },
   ];
 
+  const handleCashPayClick = async () => {
+    if (!bill) return;
+    setPaymentLoading(true);
+
+    try {
+      // Notify backend we want to pay via cash
+      await api.post(`/bills/${bill._id}/pay/cash-intent`, {
+        tableNumber: order?.tableNumber || 'N/A'
+      });
+
+      // Update local state to show "verifying" immediately
+      setBill((prev: any) => {
+        if (!prev) return null;
+        return { ...prev, paymentStatus: 'verifying', paymentMethod: 'cash' };
+      });
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to request cash settlement.');
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
   const handleUPIPayClick = async () => {
     if (!bill || !bill.restaurantId?.paymentSettings?.upiId) return;
     setPaymentLoading(true);
@@ -366,19 +388,32 @@ export default function OrderStatusPage() {
                   )}
                 </div>
 
-                {/* Direct UPI Intent Option */}
-                {bill.restaurantId?.paymentSettings?.upiId && (
-                  <div className="space-y-2 pt-1.5 border-t border-border/30 w-full">
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider block">Pay Online</span>
+                {/* Payment Options Selection */}
+                <div className="space-y-3 pt-2.5 border-t border-border/30 w-full">
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider block">Choose Settlement Method</span>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Direct UPI Intent Option */}
+                    {bill.restaurantId?.paymentSettings?.upiId && (
+                      <button
+                        onClick={handleUPIPayClick}
+                        disabled={paymentLoading}
+                        className="flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-sm"
+                      >
+                        <Smartphone className="w-4 h-4" /> Pay via UPI App
+                      </button>
+                    )}
+
+                    {/* Pay in Cash Option */}
                     <button
-                      onClick={handleUPIPayClick}
+                      onClick={handleCashPayClick}
                       disabled={paymentLoading}
-                      className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-sm"
+                      className="flex items-center justify-center gap-2 px-4 py-2.5 bg-secondary hover:bg-muted text-foreground border border-border/80 rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-sm"
                     >
-                      <Smartphone className="w-4 h-4" /> Pay via UPI App (GPay/PhonePe/Paytm)
+                      <Coins className="w-4 h-4 text-primary" /> Pay in Cash / Counter
                     </button>
                   </div>
-                )}
+                </div>
               </div>
             )}
           </Card>

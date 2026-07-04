@@ -279,7 +279,10 @@ router.patch('/:id/status', protect, restrictTo('restaurant_admin', 'staff'), as
           console.log(`[Billing] Bill invoice generated: ${billNo}`);
 
           if (io) {
-            io.to(order._id.toString()).emit('bill_ready', bill);
+            const populatedBill = await Bill.findById(bill._id)
+              .populate('orderId')
+              .populate('restaurantId', 'name address contact gstNumber paymentSettings');
+            io.to(order._id.toString()).emit('bill_ready', populatedBill);
           }
         }
       }
