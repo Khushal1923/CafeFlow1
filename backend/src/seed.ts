@@ -40,6 +40,9 @@ const seedDatabase = async () => {
         primaryColor: '#d97706', // Warm Amber
         darkMode: false,
       },
+      paymentSettings: {
+        upiId: 'merchant@upi',
+      },
       status: 'active',
     });
     await cafe.save();

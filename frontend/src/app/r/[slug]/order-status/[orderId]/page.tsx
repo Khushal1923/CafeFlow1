@@ -10,7 +10,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import ThemeToggle from '../../../../../components/ThemeToggle';
 import { 
   Loader2, Coffee, CheckCircle2, ChefHat, Bell, Sparkles, 
-  Receipt, Download, Printer, ArrowLeft, MessageSquare, AlertCircle, Plus
+  Receipt, Download, Printer, ArrowLeft, MessageSquare, AlertCircle, Plus,
+  Smartphone
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -42,8 +43,18 @@ interface Order {
 }
 
 interface Bill {
+  _id: string;
   billNumber: string;
   pdfUrl?: string;
+  totalAmount: number;
+  paymentStatus: 'pending' | 'verifying' | 'paid';
+  paymentMethod?: 'upi_link' | 'cash';
+  restaurantId?: {
+    name: string;
+    paymentSettings?: {
+      upiId?: string;
+    };
+  };
 }
 
 export default function OrderStatusPage() {
@@ -121,9 +132,15 @@ export default function OrderStatusPage() {
       setBill(billRecord);
     });
 
+    socket.on('bill_status_updated', (updatedBill: Bill) => {
+      console.log('[Socket] Bill status updated:', updatedBill.paymentStatus);
+      setBill(updatedBill);
+    });
+
     return () => {
       socket.off('order_status_updated');
       socket.off('bill_ready');
+      socket.off('bill_status_updated');
     };
   }, [socket, orderId]);
 
@@ -172,6 +189,40 @@ export default function OrderStatusPage() {
     { label: 'Ready', desc: 'Awaiting server', icon: Bell },
     { label: 'Served', desc: 'Dishes served', icon: Coffee },
   ];
+
+  const [paymentLoading, setPaymentLoading] = useState(false);
+
+  const handleUPIPayClick = async () => {
+    if (!bill || !bill.restaurantId?.paymentSettings?.upiId) return;
+    setPaymentLoading(true);
+
+    try {
+      const upiId = bill.restaurantId.paymentSettings.upiId;
+      const name = encodeURIComponent(bill.restaurantId.name || 'Restaurant');
+      const amount = bill.totalAmount.toFixed(2);
+      const note = encodeURIComponent(`Invoice_${bill.billNumber}`);
+      
+      const upiUrl = `upi://pay?pa=${upiId}&pn=${name}&am=${amount}&cu=INR&tn=${note}`;
+
+      // Notify backend we are attempting UPI
+      await api.post(`/bills/${bill._id}/pay/upi-intent`, {
+        tableNumber: order?.tableNumber || 'N/A'
+      });
+
+      // Redirect to UPI App
+      window.location.href = upiUrl;
+      
+      // Update local state to show "verifying" immediately
+      setBill((prev: any) => {
+        if (!prev) return null;
+        return { ...prev, paymentStatus: 'verifying', paymentMethod: 'upi_link' };
+      });
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to initialize UPI payment.');
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
 
   const getBackendBillUrl = (pdfPath: string): string => {
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
@@ -254,45 +305,83 @@ export default function OrderStatusPage() {
           )}
         </Card>
 
-        {/* Invoice Generator Card (Only active when bill is generated) */}
+        {/* Invoice Generator Card */}
         {bill && (
-          <Card className="border border-emerald-500/20 bg-emerald-50/10 dark:bg-emerald-950/5 shadow-md p-5 flex flex-col sm:flex-row items-center justify-between gap-4 animate-slide-up">
-            <div className="flex items-center gap-3 text-center sm:text-left">
-              <div className="w-11 h-11 bg-emerald-100 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-xl flex items-center justify-center">
-                <Receipt className="w-6 h-6" />
+          <Card className="border border-border/60 shadow-lg p-5 flex flex-col items-center justify-between gap-4 animate-slide-up">
+            {bill.paymentStatus === 'paid' ? (
+              <div className="flex flex-col gap-4 w-full">
+                <div className="flex items-center gap-3 bg-emerald-500/10 p-4 rounded-xl border border-emerald-500/20 text-emerald-800 dark:text-emerald-400">
+                  <CheckCircle2 className="w-6 h-6 shrink-0 text-emerald-500 animate-bounce" />
+                  <div className="text-xs">
+                    <h4 className="font-bold text-sm">Payment Confirmed!</h4>
+                    <p className="text-muted-foreground/90 mt-0.5">Thank you for dining with us. Your bill is fully settled.</p>
+                  </div>
+                </div>
+                
+                <div className="flex gap-2 w-full justify-between items-center pt-2">
+                  <span className="text-xs font-semibold text-muted-foreground font-mono">Invoice: {bill.billNumber}</span>
+                  {bill.pdfUrl && (
+                    <a
+                      href={getBackendBillUrl(bill.pdfUrl)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" /> Download PDF Receipt
+                    </a>
+                  )}
+                </div>
               </div>
-              <div>
-                <h3 className="font-serif font-extrabold text-sm md:text-base">GST Bill Invoice Ready</h3>
-                <p className="text-xs text-muted-foreground">Settlement Code: {bill.billNumber}</p>
+            ) : bill.paymentStatus === 'verifying' ? (
+              <div className="flex flex-col gap-3 w-full">
+                <div className="flex items-center gap-3 bg-amber-500/10 p-4 rounded-xl border border-amber-500/20 text-amber-800 dark:text-amber-400">
+                  <Loader2 className="w-5 h-5 shrink-0 animate-spin text-amber-600" />
+                  <div className="text-xs">
+                    <h4 className="font-bold text-sm">Verifying UPI Payment</h4>
+                    <p className="text-muted-foreground/90 mt-0.5">Wait a moment, we are verifying the transaction at the counter.</p>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center text-[10px] text-muted-foreground pt-1 px-1 font-mono">
+                  <span>Code: {bill.billNumber}</span>
+                  <span>Rs. {bill.totalAmount.toFixed(2)}</span>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="flex flex-col gap-4 w-full">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-serif font-black text-sm md:text-base text-foreground">Settlement Invoice Generated</h3>
+                    <p className="text-xs text-muted-foreground">Code: {bill.billNumber} • Rs. {bill.totalAmount.toFixed(2)}</p>
+                  </div>
+                  {bill.pdfUrl && (
+                    <button
+                      onClick={() => {
+                        const win = window.open(getBackendBillUrl(bill.pdfUrl || ''), '_blank');
+                        if (win) win.focus();
+                      }}
+                      className="p-2 border border-border rounded-lg bg-background text-foreground hover:bg-secondary cursor-pointer"
+                      title="View Invoice PDF"
+                    >
+                      <Printer className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
 
-            <div className="flex gap-2 w-full sm:w-auto shrink-0">
-              {bill.pdfUrl && (
-                <>
-                  <a
-                    href={getBackendBillUrl(bill.pdfUrl || '')}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 sm:flex-initial"
-                  >
-                    <Button variant="outline" size="sm" className="w-full text-xs gap-1 border-emerald-600/20 text-emerald-600 hover:bg-emerald-600 hover:text-white font-bold cursor-pointer">
-                      <Download className="w-3.5 h-3.5" /> Download PDF
-                    </Button>
-                  </a>
-                  <button
-                    onClick={() => {
-                      const win = window.open(getBackendBillUrl(bill.pdfUrl || ''), '_blank');
-                      if (win) win.focus();
-                    }}
-                    className="p-2.5 rounded-lg border border-border bg-background text-foreground hover:bg-secondary cursor-pointer"
-                    title="Print Receipt"
-                  >
-                    <Printer className="w-4 h-4" />
-                  </button>
-                </>
-              )}
-            </div>
+                {/* Direct UPI Intent Option */}
+                {bill.restaurantId?.paymentSettings?.upiId && (
+                  <div className="space-y-2 pt-1.5 border-t border-border/30 w-full">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider block">Pay Online</span>
+                    <button
+                      onClick={handleUPIPayClick}
+                      disabled={paymentLoading}
+                      className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-sm"
+                    >
+                      <Smartphone className="w-4 h-4" /> Pay via UPI App (GPay/PhonePe/Paytm)
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </Card>
         )}
 

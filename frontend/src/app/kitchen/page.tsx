@@ -11,7 +11,7 @@ import { Badge } from '../../components/ui/badge';
 import ThemeToggle from '../../components/ThemeToggle';
 import { 
   Loader2, LogOut, Clock, ChefHat, CheckSquare, BellRing, 
-  Sparkles, Coffee, AlertTriangle, Play, CheckCircle2, X, Plus
+  Sparkles, Coffee, AlertTriangle, Play, CheckCircle2, X, Plus, Smartphone
 } from 'lucide-react';
 
 interface Bill {
@@ -77,6 +77,9 @@ export default function KitchenDashboard() {
 
   // Track order IDs that recently appended items (for visual highlight)
   const [recentlyAppendedOrderIds, setRecentlyAppendedOrderIds] = useState<string[]>([]);
+
+  // Track UPI bills verifying state
+  const [verifyingBills, setVerifyingBills] = useState<{ billId: string; billNumber: string; tableNumber: string; totalAmount: number }[]>([]);
 
   // Bind to socket updates for this restaurant room
   const socket = useSocket('restaurant', restaurantId);
@@ -194,6 +197,19 @@ export default function KitchenDashboard() {
       setWaiterRequests((prev) => prev.filter((r) => r._id !== payload._id));
     });
 
+    socket.on('bill_payment_verifying', (data: { billId: string; billNumber: string; tableNumber: string; totalAmount: number }) => {
+      console.log('[Kitchen Socket] UPI bill verifying:', data.billId);
+      playChime();
+      setVerifyingBills((prev) => {
+        if (prev.some((b) => b.billId === data.billId)) return prev;
+        return [data, ...prev];
+      });
+    });
+
+    socket.on('bill_payment_approved', (payload: { billId: string }) => {
+      setVerifyingBills((prev) => prev.filter((b) => b.billId !== payload.billId));
+    });
+
     socket.on('order_items_appended', (data: { orderId: string; tableNumber: string; newItems: any[] }) => {
       console.log('[Kitchen Socket] Items appended to order:', data.orderId);
       playChime();
@@ -212,6 +228,8 @@ export default function KitchenDashboard() {
       socket.off('waiter_requested');
       socket.off('waiter_request_resolved');
       socket.off('order_items_appended');
+      socket.off('bill_payment_verifying');
+      socket.off('bill_payment_approved');
     };
   }, [socket]);
 
@@ -288,6 +306,16 @@ export default function KitchenDashboard() {
       setWaiterRequests((prev) => prev.filter((r) => r._id !== requestId));
     } catch (err: any) {
       alert(err.response?.data?.message || 'Failed to resolve service request.');
+    }
+  };
+
+  const handleApprovePayment = async (billId: string) => {
+    try {
+      await api.post(`/bills/${billId}/pay/approve`, { paymentMethod: 'upi_link' });
+      setVerifyingBills((prev) => prev.filter((b) => b.billId !== billId));
+      fetchRecentBills();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to approve payment.');
     }
   };
 
@@ -554,6 +582,44 @@ export default function KitchenDashboard() {
 
           {/* Recent Completed Bills (Right side, takes 3 columns on desktop) */}
           <div className="lg:col-span-3 space-y-4">
+            {/* Table UPI Payment Verifications */}
+            {verifyingBills.length > 0 && (
+              <Card className="border border-emerald-500 bg-emerald-500/5 shadow-lg">
+                <CardHeader className="pb-2 pt-4 px-4">
+                  <CardTitle className="text-sm font-serif font-black flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                    <Smartphone className="w-4 h-4 animate-bounce text-emerald-600" /> UPI Settlements
+                  </CardTitle>
+                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400/80">Confirm payments received in your bank app</p>
+                </CardHeader>
+                <CardContent className="p-4 pt-0">
+                  <div className="space-y-2.5">
+                    {verifyingBills.map((billObj) => (
+                      <div
+                        key={billObj.billId}
+                        className="relative border border-emerald-200 dark:border-emerald-950/60 p-3 rounded-xl bg-emerald-500/10 flex flex-col gap-1 hover:border-emerald-300 transition-all"
+                      >
+                        <div className="pr-16">
+                          <span className="text-[9px] uppercase font-bold text-emerald-700 dark:text-emerald-400 font-sans">
+                            Table T-{billObj.tableNumber} • {billObj.billNumber}
+                          </span>
+                          <h4 className="text-xs font-black text-foreground font-sans mt-0.5">
+                            Rs. {billObj.totalAmount.toFixed(2)}
+                          </h4>
+                        </div>
+
+                        <button
+                          onClick={() => handleApprovePayment(billObj.billId)}
+                          className="absolute top-3 right-3 px-2 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold cursor-pointer transition-colors shadow shadow-emerald-500/10 font-sans uppercase tracking-wider"
+                        >
+                          Approve
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Table Service Calls Alert Queue */}
             {waiterRequests.length > 0 && (
               <Card className="border border-amber-500/30 bg-amber-500/5 shadow-md">

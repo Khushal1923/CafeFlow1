@@ -16,6 +16,9 @@ export interface IRestaurant extends Document {
     latitude: number;
     longitude: number;
   };
+  paymentSettings?: {
+    upiId?: string;
+  };
   status: 'active' | 'suspended';
   createdAt: Date;
   updatedAt: Date;
@@ -37,6 +40,9 @@ const RestaurantSchema: Schema = new Schema(
     location: {
       latitude: { type: Number },
       longitude: { type: Number },
+    },
+    paymentSettings: {
+      upiId: { type: String, default: '' },
     },
     status: { type: String, enum: ['active', 'suspended'], default: 'active' },
   },
