@@ -218,12 +218,25 @@ export default function OrderStatusPage() {
   };
 
   const getUpiUrl = (): string => {
-    if (!bill || !bill.restaurantId?.paymentSettings?.upiId) return '';
-    const upiId = bill.restaurantId.paymentSettings.upiId;
-    const name = encodeURIComponent(bill.restaurantId.name || 'Restaurant');
+    if (!bill) return '';
+    const upiSettings = bill.restaurantId?.paymentSettings;
+    if (!upiSettings?.upiId && !upiSettings?.upiPhone) return '';
+
+    let payeeAddress = upiSettings.upiId || '';
+    if (upiSettings.upiPhone) {
+      const cleanPhone = upiSettings.upiPhone.replace(/[^0-9]/g, '');
+      const tenDigitPhone = cleanPhone.length > 10 ? cleanPhone.slice(-10) : cleanPhone;
+      if (tenDigitPhone.length === 10) {
+        payeeAddress = `${tenDigitPhone}@upi`;
+      }
+    }
+
+    if (!payeeAddress) return '';
+
+    const name = encodeURIComponent(bill.restaurantId?.name || 'Restaurant');
     const amount = bill.totalAmount.toFixed(2);
     const note = encodeURIComponent(`Invoice_${bill.billNumber}`);
-    return `upi://pay?pa=${upiId}&pn=${name}&am=${amount}&cu=INR&tn=${note}`;
+    return `upi://pay?pa=${payeeAddress}&pn=${name}&am=${amount}&cu=INR&tn=${note}`;
   };
 
   const handleCopyText = (text: string, isPhone: boolean) => {
@@ -502,7 +515,7 @@ export default function OrderStatusPage() {
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {/* Direct UPI Intent Option */}
-                      {bill.restaurantId?.paymentSettings?.upiId && (
+                      {(bill.restaurantId?.paymentSettings?.upiId || bill.restaurantId?.paymentSettings?.upiPhone) && (
                         <button
                           onClick={() => setShowUpiPanel(true)}
                           disabled={paymentLoading}
