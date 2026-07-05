@@ -18,6 +18,7 @@ export interface IRestaurant extends Document {
   };
   paymentSettings?: {
     upiId?: string;
+    upiPhone?: string;
   };
   status: 'active' | 'suspended';
   createdAt: Date;
@@ -43,6 +44,7 @@ const RestaurantSchema: Schema = new Schema(
     },
     paymentSettings: {
       upiId: { type: String, default: '' },
+      upiPhone: { type: String, default: '' },
     },
     status: { type: String, enum: ['active', 'suspended'], default: 'active' },
   },

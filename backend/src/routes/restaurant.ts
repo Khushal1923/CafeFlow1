@@ -97,6 +97,7 @@ router.patch('/my-restaurant', protect, restrictTo('restaurant_admin'), async (r
     if (paymentSettings) {
       updatedFields.paymentSettings = {
         upiId: paymentSettings.upiId || '',
+        upiPhone: paymentSettings.upiPhone || '',
       };
     }
 

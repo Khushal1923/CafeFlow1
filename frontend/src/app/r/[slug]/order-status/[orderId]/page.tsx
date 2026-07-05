@@ -11,7 +11,7 @@ import ThemeToggle from '../../../../../components/ThemeToggle';
 import { 
   Loader2, Coffee, CheckCircle2, ChefHat, Bell, Sparkles, 
   Receipt, Download, Printer, ArrowLeft, MessageSquare, AlertCircle, Plus,
-  Smartphone, Coins
+  Smartphone, Coins, Copy, Check, QrCode
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -53,6 +53,7 @@ interface Bill {
     name: string;
     paymentSettings?: {
       upiId?: string;
+      upiPhone?: string;
     };
   };
 }
@@ -69,6 +70,8 @@ export default function OrderStatusPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [copiedUpiId, setCopiedUpiId] = useState(false);
+  const [copiedUpiPhone, setCopiedUpiPhone] = useState(false);
 
   // Initialize socket listener for this order room
   const socket = useSocket('order', orderId);
@@ -213,26 +216,36 @@ export default function OrderStatusPage() {
     }
   };
 
+  const getUpiUrl = (): string => {
+    if (!bill || !bill.restaurantId?.paymentSettings?.upiId) return '';
+    const upiId = bill.restaurantId.paymentSettings.upiId;
+    const name = encodeURIComponent(bill.restaurantId.name || 'Restaurant');
+    const amount = bill.totalAmount.toFixed(2);
+    const note = encodeURIComponent(`Invoice_${bill.billNumber}`);
+    return `upi://pay?pa=${upiId}&pn=${name}&am=${amount}&cu=INR&tn=${note}`;
+  };
+
+  const handleCopyText = (text: string, isPhone: boolean) => {
+    navigator.clipboard.writeText(text);
+    if (isPhone) {
+      setCopiedUpiPhone(true);
+      setTimeout(() => setCopiedUpiPhone(false), 2000);
+    } else {
+      setCopiedUpiId(true);
+      setTimeout(() => setCopiedUpiId(false), 2000);
+    }
+  };
+
   const handleUPIPayClick = async () => {
     if (!bill || !bill.restaurantId?.paymentSettings?.upiId) return;
     setPaymentLoading(true);
 
     try {
-      const upiId = bill.restaurantId.paymentSettings.upiId;
-      const name = encodeURIComponent(bill.restaurantId.name || 'Restaurant');
-      const amount = bill.totalAmount.toFixed(2);
-      const note = encodeURIComponent(`Invoice_${bill.billNumber}`);
-      
-      const upiUrl = `upi://pay?pa=${upiId}&pn=${name}&am=${amount}&cu=INR&tn=${note}`;
-
       // Notify backend we are attempting UPI
       await api.post(`/bills/${bill._id}/pay/upi-intent`, {
         tableNumber: order?.tableNumber || 'N/A'
       });
 
-      // Redirect to UPI App
-      window.location.href = upiUrl;
-      
       // Update local state to show "verifying" immediately
       setBill((prev: any) => {
         if (!prev) return null;
@@ -388,32 +401,127 @@ export default function OrderStatusPage() {
                   )}
                 </div>
 
-                {/* Payment Options Selection */}
-                <div className="space-y-3 pt-2.5 border-t border-border/30 w-full">
-                  <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider block">Choose Settlement Method</span>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {/* Direct UPI Intent Option */}
-                    {bill.restaurantId?.paymentSettings?.upiId && (
+                {/* Payment Options Selection / Interactive Panel */}
+                {showUpiPanel ? (
+                  <div className="space-y-4 pt-3 border-t border-border/30 w-full animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        <QrCode className="w-4 h-4 text-amber-500 animate-pulse" /> UPI Payment Panel
+                      </h4>
                       <button
-                        onClick={handleUPIPayClick}
-                        disabled={paymentLoading}
-                        className="flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-sm"
+                        onClick={() => setShowUpiPanel(false)}
+                        className="text-[10px] font-bold text-muted-foreground hover:text-foreground cursor-pointer"
                       >
-                        <Smartphone className="w-4 h-4" /> Pay via UPI App
+                        ← Back to Methods
                       </button>
-                    )}
+                    </div>
 
-                    {/* Pay in Cash Option */}
+                    {/* QR Code display */}
+                    <div className="flex flex-col items-center justify-center p-3 bg-secondary/30 rounded-xl border border-border/40 gap-1.5">
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(getUpiUrl())}`}
+                        alt="UPI Payment QR Code"
+                        className="w-40 h-40 bg-white p-2 rounded-lg border border-border shadow-sm"
+                      />
+                      <span className="text-[10px] text-muted-foreground font-medium text-center">
+                        Scan this QR code using GPay, PhonePe, or Paytm to pay
+                      </span>
+                    </div>
+
+                    {/* Copy details block */}
+                    <div className="space-y-2.5">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">UPI Address (VPA)</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            readOnly
+                            value={bill.restaurantId?.paymentSettings?.upiId || ''}
+                            className="bg-secondary/60 border border-border/80 rounded-xl px-3 py-2 text-xs font-mono font-medium flex-1 text-foreground focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText(bill.restaurantId?.paymentSettings?.upiId || '', false)}
+                            className="px-3 border border-border rounded-xl bg-background hover:bg-secondary cursor-pointer flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                            title="Copy VPA"
+                          >
+                            {copiedUpiId ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      {bill.restaurantId?.paymentSettings?.upiPhone && (
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Linked Phone Number</label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              readOnly
+                              value={bill.restaurantId.paymentSettings.upiPhone}
+                              className="bg-secondary/60 border border-border/80 rounded-xl px-3 py-2 text-xs font-medium flex-1 text-foreground focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleCopyText(bill.restaurantId?.paymentSettings?.upiPhone || '', true)}
+                              className="px-3 border border-border rounded-xl bg-background hover:bg-secondary cursor-pointer flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                              title="Copy Phone Number"
+                            >
+                              {copiedUpiPhone ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Trigger App Launch fallback */}
+                    <div className="space-y-2 pt-1.5 border-t border-border/20">
+                      <a
+                        href={getUpiUrl()}
+                        className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-sm text-center"
+                      >
+                        <Smartphone className="w-4 h-4" /> Open UPI App Directly
+                      </a>
+                      <p className="text-[9px] text-muted-foreground leading-normal pl-1">
+                        ⚠️ **Risk Policy Warning**: If your UPI App blocks the transaction directly, please copy the **VPA Address** or **Phone Number** above and make a manual transfer.
+                      </p>
+                    </div>
+
+                    {/* Notify counter trigger */}
                     <button
-                      onClick={handleCashPayClick}
+                      onClick={handleUPIPayClick}
                       disabled={paymentLoading}
-                      className="flex items-center justify-center gap-2 px-4 py-2.5 bg-secondary hover:bg-muted text-foreground border border-border/80 rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-sm"
+                      className="w-full mt-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-md shadow-emerald-500/10 uppercase tracking-wider"
                     >
-                      <Coins className="w-4 h-4 text-primary" /> Pay in Cash / Counter
+                      {paymentLoading ? 'Submitting...' : 'I Have Paid (Notify Cashier)'}
                     </button>
                   </div>
-                </div>
+                ) : (
+                  <div className="space-y-3 pt-2.5 border-t border-border/30 w-full animate-in fade-in duration-300">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider block">Choose Settlement Method</span>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* Direct UPI Intent Option */}
+                      {bill.restaurantId?.paymentSettings?.upiId && (
+                        <button
+                          onClick={() => setShowUpiPanel(true)}
+                          disabled={paymentLoading}
+                          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-sm"
+                        >
+                          <Smartphone className="w-4 h-4" /> Pay via UPI Online
+                        </button>
+                      )}
+
+                      {/* Pay in Cash Option */}
+                      <button
+                        onClick={handleCashPayClick}
+                        disabled={paymentLoading}
+                        className="flex items-center justify-center gap-2 px-4 py-2.5 bg-secondary hover:bg-muted text-foreground border border-border/80 rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-sm"
+                      >
+                        <Coins className="w-4 h-4 text-primary" /> Pay in Cash / Counter
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </Card>

@@ -42,6 +42,7 @@ const seedDatabase = async () => {
       },
       paymentSettings: {
         upiId: 'merchant@upi',
+        upiPhone: '+91 98765 43210',
       },
       status: 'active',
     });

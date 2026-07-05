@@ -19,6 +19,7 @@ export default function SettingsPage() {
   const [gstNumber, setGstNumber] = useState('');
   const [taxRate, setTaxRate] = useState(5);
   const [upiId, setUpiId] = useState('');
+  const [upiPhone, setUpiPhone] = useState('');
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -32,6 +33,7 @@ export default function SettingsPage() {
           setGstNumber(restaurant.gstNumber || '');
           setTaxRate(restaurant.taxRate ?? 5);
           setUpiId(restaurant.paymentSettings?.upiId || '');
+          setUpiPhone(restaurant.paymentSettings?.upiPhone || '');
         }
       } catch (err: any) {
         console.error('Fetch settings error:', err);
@@ -59,6 +61,7 @@ export default function SettingsPage() {
         taxRate: Number(taxRate),
         paymentSettings: {
           upiId,
+          upiPhone,
         },
       });
 
@@ -201,26 +204,42 @@ export default function SettingsPage() {
                   <Smartphone className="w-4 h-4 text-amber-500" /> Direct UPI Payout (Zero-Fee payments)
                 </h4>
                 <p className="text-[10px] text-muted-foreground mt-0.5">
-                  Enter your business UPI ID / VPA. When customers order and pay, their GPay/PhonePe will directly credit this address.
+                  Enter your business UPI ID (VPA) and linked phone number. This lets customers pay directly without transaction fees.
                 </p>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">UPI Address (VPA)</label>
-                <div className="relative">
-                  <Smartphone className="absolute left-3 top-3 w-4 h-4 text-muted-foreground/60" />
-                  <input
-                    type="text"
-                    value={upiId}
-                    onChange={(e) => setUpiId(e.target.value)}
-                    className="w-full bg-secondary border border-border/80 rounded-xl py-2.5 pl-9 pr-4 text-xs font-medium font-mono focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
-                    placeholder="e.g. coffeehouse@okhdfcbank"
-                  />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">UPI Address (VPA)</label>
+                  <div className="relative">
+                    <Smartphone className="absolute left-3 top-3 w-4 h-4 text-muted-foreground/60" />
+                    <input
+                      type="text"
+                      value={upiId}
+                      onChange={(e) => setUpiId(e.target.value)}
+                      className="w-full bg-secondary border border-border/80 rounded-xl py-2.5 pl-9 pr-4 text-xs font-medium font-mono focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                      placeholder="e.g. merchant@upi"
+                    />
+                  </div>
                 </div>
-                <span className="text-[9px] text-muted-foreground block pl-1">
-                  Leave empty to disable online UPI payment options on the customer tracking screen.
-                </span>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">UPI Phone Number</label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-3 w-4 h-4 text-muted-foreground/60" />
+                    <input
+                      type="text"
+                      value={upiPhone}
+                      onChange={(e) => setUpiPhone(e.target.value)}
+                      className="w-full bg-secondary border border-border/80 rounded-xl py-2.5 pl-9 pr-4 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                      placeholder="e.g. +91 98765 43210"
+                    />
+                  </div>
+                </div>
               </div>
+              <span className="text-[9px] text-muted-foreground block pl-1">
+                Configure both fields so customers have backup payment methods (like copying the phone number or VPA) if their app blocks the dynamic link.
+              </span>
             </div>
           </CardContent>
 
