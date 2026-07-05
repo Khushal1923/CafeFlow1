@@ -72,6 +72,7 @@ export default function OrderStatusPage() {
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [copiedUpiId, setCopiedUpiId] = useState(false);
   const [copiedUpiPhone, setCopiedUpiPhone] = useState(false);
+  const [showUpiPanel, setShowUpiPanel] = useState(false);
 
   // Initialize socket listener for this order room
   const socket = useSocket('order', orderId);
