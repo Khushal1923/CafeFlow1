@@ -13,7 +13,7 @@ import useSocket from '../../../../hooks/useSocket';
 import { 
   Loader2, ShoppingBag, Search, Plus, Minus, X, Check, Coffee, 
   Trash2, Phone, User, ShieldCheck, ChevronRight, MessageSquare, Bell,
-  BookOpen, Home, Receipt, Coins, Store, MapPin, Clock, Star, Printer, QrCode, Copy, AlertCircle, Award, Download, Smartphone, CheckCircle2
+  BookOpen, Home, Receipt, Coins, Store, MapPin, Clock, Star, Printer, QrCode, Copy, AlertCircle, Award, Download, Smartphone, CheckCircle2, Sparkles
 } from 'lucide-react';
 
 interface CustomizationOption {
