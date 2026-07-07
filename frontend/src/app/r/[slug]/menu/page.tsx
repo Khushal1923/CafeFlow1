@@ -980,8 +980,9 @@ export default function CustomerMenuPage() {
                     >
                       <Smartphone className="w-4 h-4" /> Open UPI App Directly
                     </a>
-                    <p className="text-[9px] text-muted-foreground leading-normal pl-1">
-                      ⚠️ **Risk Policy Warning**: If your UPI App blocks the transaction directly, please copy the **VPA Address** or **Phone Number** above and make a manual transfer.
+                    <p className="text-[10px] text-muted-foreground leading-normal pl-1 space-y-1.5">
+                      <span>⚠️ **UPI App Block Warning**: Google Pay sometimes restricts scanning direct QR codes for certain personal VPAs (like `@ptaxis`).</span>
+                      <span className="block text-amber-500 font-semibold">💡 **GPay Workaround**: Copy the **Linked Phone Number** above, open Google Pay, choose **"Pay Phone Number"**, paste the number, and pay directly! Alternatively, scan the QR code using **PhonePe** or **Paytm** which will resolve the payment immediately.</span>
                     </p>
                   </div>
 
