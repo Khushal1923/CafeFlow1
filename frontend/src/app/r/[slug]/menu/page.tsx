@@ -1015,6 +1015,162 @@ export default function CustomerMenuPage() {
     );
   };
 
+  const renderMenuTab = () => {
+    return (
+      <div className="animate-fade-in">
+        {/* Hero Banner Intro */}
+        <section className="bg-stone-900 text-stone-100 py-8 px-4 text-center relative overflow-hidden">
+          <div className="absolute inset-0 z-0">
+            <img 
+              src="https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=800&auto=format&fit=crop" 
+              alt="Hero Menu" 
+              className="w-full h-full object-cover opacity-20 filter blur-[1px]" 
+            />
+          </div>
+          <div className="relative z-10 space-y-1">
+            <h1 className="font-serif text-2xl md:text-3xl font-extrabold text-stone-50">Our Digital Menu</h1>
+            <p className="text-xs text-stone-300">Tap items to customize, verify details, and check out table-side.</p>
+          </div>
+        </section>
+
+        {/* Filters & Categories block */}
+        <section className="sticky top-[61px] z-30 bg-background/95 backdrop-blur px-4 py-3 border-b border-border/40 space-y-3 shadow-sm">
+          {/* Search & Veg Toggle */}
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search dishes..."
+                className="w-full text-sm bg-secondary/60 border border-border/80 rounded-xl pl-9 pr-4 py-2.5 outline-none focus:ring-2 focus:ring-primary focus:bg-background transition-all"
+              />
+            </div>
+
+            <button
+              onClick={() => setVegOnly(!vegOnly)}
+              className={`px-3 py-2.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                vegOnly 
+                  ? 'bg-green-600/10 text-green-600 border-green-600/20' 
+                  : 'bg-secondary/40 border-border text-muted-foreground'
+              }`}
+            >
+              <span className={`w-2.5 h-2.5 rounded-full ${vegOnly ? 'bg-green-600' : 'border border-muted-foreground/60'}`} />
+              Veg Only
+            </button>
+          </div>
+
+          {/* Scrollable Categories selector */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            {categories.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all border cursor-pointer ${
+                  selectedCategory === cat
+                    ? 'bg-primary text-primary-foreground border-transparent shadow shadow-primary/10 scale-105'
+                    : 'bg-secondary/50 text-muted-foreground border-border hover:bg-secondary'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {/* Dishes Grid */}
+        <main className="max-w-4xl mx-auto px-4 mt-6 pb-24">
+          {filteredDishes.length === 0 ? (
+            <div className="text-center py-16 space-y-2">
+              <Coffee className="w-10 h-10 text-muted-foreground/40 mx-auto" />
+              <h3 className="font-serif font-bold text-muted-foreground">No dishes matching filters</h3>
+              <p className="text-xs text-muted-foreground/80">Try modifying your search queries or category tags.</p>
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              {filteredDishes.map((dish) => (
+                <Card key={dish._id} className="overflow-hidden border border-border/60 hover:border-primary/20 shadow-sm transition-all duration-200">
+                  <CardContent className="p-0 flex min-h-[8rem] h-auto">
+                    {/* Dish Details */}
+                    <div className="flex-1 p-4 flex flex-col justify-between pr-2">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`w-2.5 h-2.5 rounded-full shrink-0 flex items-center justify-center border ${dish.veg ? 'bg-green-600 border-green-700/20' : 'bg-red-600 border-red-700/20'}`}>
+                            <span className="w-1 h-1 bg-white rounded-full" />
+                          </span>
+                          <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">{dish.category}</span>
+                        </div>
+                        
+                        <h3 className="font-serif font-bold text-sm md:text-base leading-snug">{dish.name}</h3>
+                        <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">{dish.description}</p>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="font-extrabold text-sm text-foreground">Rs. {dish.price.toFixed(2)}</span>
+                        
+                        {!dish.available ? (
+                          <Badge variant="secondary" className="text-[10px]">Out of stock</Badge>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleAddToCartClick(dish)}
+                            className="h-8 rounded-lg px-3 text-xs bg-primary/5 text-primary border-primary/20 hover:bg-primary hover:text-primary-foreground transition-all cursor-pointer font-bold gap-1"
+                          >
+                            Add <Plus className="w-3 h-3" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Dish Image */}
+                    <div className="w-32 h-full relative shrink-0">
+                      <img
+                        src={dish.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=250&auto=format&fit=crop'}
+                        alt={dish.name}
+                        className="w-full h-full object-cover"
+                      />
+                      {!dish.available && (
+                        <div className="absolute inset-0 bg-stone-900/60 flex items-center justify-center backdrop-blur-[1px]">
+                          <span className="text-[10px] font-bold text-stone-100 uppercase tracking-widest">Unavailable</span>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </main>
+
+        {/* Floating Bottom Cart Bar */}
+        {cartItems.length > 0 && !isCartOpen && (
+          <div className="fixed bottom-20 left-4 right-4 z-40 max-w-lg mx-auto bg-primary text-primary-foreground rounded-2xl p-4 flex items-center justify-between shadow-xl shadow-primary/20 border border-primary/20 animate-slide-up">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary-foreground/15 flex items-center justify-center font-bold">
+                <ShoppingBag className="w-5 h-5 text-primary-foreground" />
+              </div>
+              <div>
+                <h4 className="text-xs font-extrabold text-primary-foreground/90 uppercase tracking-wide">
+                  {cartItems.reduce((acc, i) => acc + i.quantity, 0)} Items Added
+                </h4>
+                <span className="text-base font-extrabold">Rs. {total.toFixed(2)}</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setIsCartOpen(true)}
+              className="flex items-center gap-1 font-bold text-xs bg-primary-foreground text-primary rounded-xl px-4 py-2.5 hover:bg-stone-50 transition-all cursor-pointer uppercase tracking-wider"
+            >
+              View Cart <ChevronRight className="w-4.5 h-4.5" />
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // Filter logic
   const filteredDishes = dishes.filter((dish) => {
     const matchesCategory = selectedCategory === 'All' || dish.category === selectedCategory;
