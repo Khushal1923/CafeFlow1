@@ -85,8 +85,18 @@ export default function CustomerMenuPage() {
 
   // Checkout / Location Verification State
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
-  const [customerName, setCustomerName] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [customerName, setCustomerName] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('customer_name') || '';
+    }
+    return '';
+  });
+  const [phoneNumber, setPhoneNumber] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('customer_phone') || '';
+    }
+    return '';
+  });
   const [otpLoading, setOtpLoading] = useState(false); // Used for order placement loading spinner
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
@@ -476,9 +486,12 @@ export default function CustomerMenuPage() {
 
         // Store active order ID in localStorage for tracking persistence
         localStorage.setItem(`active_order_${slug}`, newOrder._id);
+        localStorage.setItem('customer_name', customerName);
+        localStorage.setItem('customer_phone', cleanedPhone);
         setActiveOrderId(newOrder._id);
         setActiveOrderStatus(newOrder.status);
         setOrder(newOrder);
+        setBill(null);
 
         // Switch to tracker tab
         setActiveTab('orders');
@@ -1171,6 +1184,8 @@ export default function CustomerMenuPage() {
     );
   };
 
+  const isAppendable = !!(activeOrderId && activeOrderStatus && !['completed', 'cancelled'].includes(activeOrderStatus));
+
   // Filter logic
   const filteredDishes = dishes.filter((dish) => {
     const matchesCategory = selectedCategory === 'All' || dish.category === selectedCategory;
@@ -1512,7 +1527,7 @@ export default function CustomerMenuPage() {
           <div className="bg-card text-card-foreground w-full max-w-md rounded-2xl border border-border overflow-hidden shadow-2xl p-6 space-y-5 animate-fade-in">
             <div className="flex items-center justify-between border-b border-border/50 pb-3">
               <h3 className="font-serif font-bold text-base md:text-lg flex items-center gap-1.5">
-                {activeOrderId ? (
+                              {isAppendable ? (
                   <>
                     <Plus className="w-5 h-5 text-primary animate-pulse" /> Add to Active Order
                   </>
@@ -1539,7 +1554,7 @@ export default function CustomerMenuPage() {
               </div>
             )}
 
-            {activeOrderId ? (
+            {isAppendable ? (
               /* Append Order Confirmation Mode */
               <form onSubmit={handleAppendToOrder} className="space-y-5 text-sm">
                 <p className="text-xs text-muted-foreground leading-relaxed">
