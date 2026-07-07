@@ -1222,39 +1222,7 @@ export default function CustomerMenuPage() {
         </div>
       </header>
 
-      {/* Active Order Banner Alert */}
-      {activeOrderId && (
-        <div className={`px-4 py-3 flex items-center justify-between shadow-sm border-b text-xs font-semibold animate-fade-in ${
-          activeOrderStatus === 'completed'
-            ? 'bg-emerald-600/10 text-emerald-800 dark:text-emerald-400 border-emerald-500/20'
-            : 'bg-amber-500/10 text-amber-800 dark:text-amber-400 border-amber-500/20'
-        }`}>
-          <button 
-            onClick={() => setActiveTab(activeOrderStatus === 'completed' ? 'bill' : 'orders')}
-            className="flex-1 flex items-center gap-2 hover:underline cursor-pointer text-left"
-          >
-            {activeOrderStatus === 'completed' ? (
-              <>
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                <span>📄 Your bill is ready! Click here or tap the 'Pay Bill' tab below to pay & checkout.</span>
-              </>
-            ) : (
-              <>
-                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
-                <span>🔔 You have an active order in progress ({activeOrderStatus}). Tap to track live prep.</span>
-              </>
-            )}
-          </button>
-          
-          <button
-            onClick={handleDismissActiveOrderBanner}
-            className="p-1 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary/50 cursor-pointer transition-colors"
-            title="Dismiss"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
+
 
       {/* Tab Selector Content */}
       {activeTab === 'home' && renderHomeTab()}
