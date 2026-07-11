@@ -45,8 +45,8 @@ app.use(
   })
 );
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Serve static assets - generated bills & uploaded restaurant media
 app.use('/bills', express.static(path.join(__dirname, '../public/bills')));
