@@ -228,8 +228,10 @@ export default function CustomerMenuPage() {
     const upiSettings = bill.restaurantId?.paymentSettings;
     if (!upiSettings?.upiId && !upiSettings?.upiPhone) return '';
 
-    let payeeAddress = upiSettings.upiId || '';
-    if (upiSettings.upiPhone) {
+    let payeeAddress = '';
+    if (upiSettings.upiId) {
+      payeeAddress = upiSettings.upiId;
+    } else if (upiSettings.upiPhone) {
       const cleanPhone = upiSettings.upiPhone.replace(/[^0-9]/g, '');
       const tenDigitPhone = cleanPhone.length > 10 ? cleanPhone.slice(-10) : cleanPhone;
       if (tenDigitPhone.length === 10) {
