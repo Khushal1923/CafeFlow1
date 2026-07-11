@@ -20,6 +20,7 @@ export default function SettingsPage() {
   const [taxRate, setTaxRate] = useState(5);
   const [upiId, setUpiId] = useState('');
   const [upiPhone, setUpiPhone] = useState('');
+  const [upiQrImage, setUpiQrImage] = useState('');
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -34,6 +35,7 @@ export default function SettingsPage() {
           setTaxRate(restaurant.taxRate ?? 5);
           setUpiId(restaurant.paymentSettings?.upiId || '');
           setUpiPhone(restaurant.paymentSettings?.upiPhone || '');
+          setUpiQrImage(restaurant.paymentSettings?.upiQrImage || '');
         }
       } catch (err: any) {
         console.error('Fetch settings error:', err);
@@ -62,6 +64,7 @@ export default function SettingsPage() {
         paymentSettings: {
           upiId,
           upiPhone,
+          upiQrImage,
         },
       });
 
@@ -77,6 +80,21 @@ export default function SettingsPage() {
       setSaving(false);
     }
   };
+  const handleQrFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 1024 * 1024) {
+        alert('File size too large. Please upload an image under 1MB.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setUpiQrImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
 
   if (loading) {
     return (
@@ -240,6 +258,56 @@ export default function SettingsPage() {
               <span className="text-[9px] text-muted-foreground block pl-1">
                 Configure both fields so customers have backup payment methods (like copying the phone number or VPA) if their app blocks the dynamic link.
               </span>
+
+              {/* Custom QR Code Image Upload */}
+              <div className="space-y-2.5 pt-4 border-t border-border/25">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">
+                  Custom merchant UPI QR Code
+                </label>
+                <p className="text-[10px] text-muted-foreground mt-0.5 leading-normal">
+                  Upload a screenshot or photo of your official merchant QR code (e.g. from GPay, PhonePe, or Paytm). This image will be shown directly to customers on checkout, resolving routing errors on personal VPAs.
+                </p>
+
+                <div className="flex flex-col sm:flex-row items-center gap-4 bg-secondary/30 p-4 rounded-xl border border-border/40">
+                  {/* QR Image Preview */}
+                  <div className="w-32 h-32 bg-secondary rounded-lg border border-border flex items-center justify-center overflow-hidden shrink-0 relative group">
+                    {upiQrImage ? (
+                      <>
+                        <img src={upiQrImage} alt="Custom UPI QR Code" className="w-full h-full object-contain p-2 bg-white" />
+                        <button
+                          type="button"
+                          onClick={() => setUpiQrImage('')}
+                          className="absolute inset-0 bg-stone-950/70 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-all cursor-pointer rounded-lg border-none"
+                        >
+                          Clear Image
+                        </button>
+                      </>
+                    ) : (
+                      <span className="text-[9px] text-muted-foreground text-center px-2">No QR Code uploaded</span>
+                    )}
+                  </div>
+
+                  {/* Upload action controls */}
+                  <div className="flex-1 space-y-2 text-center sm:text-left w-full">
+                    <input
+                      type="file"
+                      id="upi-qr-upload"
+                      accept="image/png, image/jpeg, image/jpg"
+                      onChange={handleQrFileChange}
+                      className="hidden"
+                    />
+                    <label
+                      htmlFor="upi-qr-upload"
+                      className="inline-flex items-center justify-center gap-1.5 px-4 py-2 border border-border rounded-xl bg-background hover:bg-secondary text-xs font-bold text-foreground transition-colors cursor-pointer shadow-sm"
+                    >
+                      Choose Image File
+                    </label>
+                    <p className="text-[9px] text-muted-foreground">
+                      Accepts PNG, JPG or JPEG. Max size 1MB.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </CardContent>
 

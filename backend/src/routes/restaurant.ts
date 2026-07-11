@@ -98,6 +98,7 @@ router.patch('/my-restaurant', protect, restrictTo('restaurant_admin'), async (r
       updatedFields.paymentSettings = {
         upiId: paymentSettings.upiId || '',
         upiPhone: paymentSettings.upiPhone || '',
+        upiQrImage: paymentSettings.upiQrImage || '',
       };
     }
 

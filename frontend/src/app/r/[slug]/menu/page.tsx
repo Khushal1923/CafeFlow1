@@ -917,14 +917,29 @@ export default function CustomerMenuPage() {
 
                   {/* QR Code display */}
                   <div className="flex flex-col items-center justify-center p-3 bg-secondary/30 rounded-xl border border-border/40 gap-1.5">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(getUpiUrl())}`}
-                      alt="UPI Payment QR Code"
-                      className="w-40 h-40 bg-white p-2 rounded-lg border border-border shadow-sm"
-                    />
-                    <span className="text-[10px] text-muted-foreground font-medium text-center">
-                      Scan this QR code using GPay, PhonePe, or Paytm to pay
-                    </span>
+                    {bill.restaurantId?.paymentSettings?.upiQrImage ? (
+                      <>
+                        <img
+                          src={bill.restaurantId.paymentSettings.upiQrImage}
+                          alt="Custom merchant UPI QR Code"
+                          className="w-40 h-40 object-contain bg-white p-2 rounded-lg border border-border shadow-sm"
+                        />
+                        <span className="text-[10px] text-muted-foreground font-medium text-center">
+                          Scan this custom merchant QR code to pay
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <img
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(getUpiUrl())}`}
+                          alt="UPI Payment QR Code"
+                          className="w-40 h-40 bg-white p-2 rounded-lg border border-border shadow-sm"
+                        />
+                        <span className="text-[10px] text-muted-foreground font-medium text-center">
+                          Scan this QR code using GPay, PhonePe, or Paytm to pay
+                        </span>
+                      </>
+                    )}
                   </div>
 
                   {/* Copy details block */}
