@@ -23,6 +23,8 @@ interface Bill {
     customerName?: string;
     tableNumber?: string;
   };
+  paymentStatus?: 'pending' | 'verifying' | 'paid';
+  paymentMethod?: 'upi_link' | 'cash';
   createdAt: string;
 }
 
@@ -200,6 +202,7 @@ export default function KitchenDashboard() {
     socket.on('bill_payment_verifying', (data: { billId: string; billNumber: string; tableNumber: string; totalAmount: number; paymentMethod?: string }) => {
       console.log('[Kitchen Socket] Bill verifying payment:', data.billId, data.paymentMethod);
       playChime();
+      fetchRecentBills();
       setVerifyingBills((prev) => {
         if (prev.some((b) => b.billId === data.billId)) return prev;
         return [data, ...prev];
@@ -207,6 +210,7 @@ export default function KitchenDashboard() {
     });
 
     socket.on('bill_payment_approved', (payload: { billId: string }) => {
+      fetchRecentBills();
       setVerifyingBills((prev) => prev.filter((b) => b.billId !== payload.billId));
     });
 
@@ -744,10 +748,56 @@ export default function KitchenDashboard() {
                           </h4>
                         </div>
 
-                        <div className="flex items-center justify-between mt-1 pt-1.5 border-t border-border/20">
-                          <span className="text-xs font-black text-primary font-sans">
-                            Rs. {bill.totalAmount.toFixed(2)}
-                          </span>
+                        {/* Payment Status & Action Section */}
+                        <div className="flex flex-col gap-2 border-t border-border/20 pt-2.5 mt-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black text-foreground font-sans">
+                              Rs. {bill.totalAmount.toFixed(2)}
+                            </span>
+
+                            {bill.paymentStatus === 'paid' ? (
+                              <Badge className="bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[9px] font-bold py-0.5 px-1.5 uppercase font-sans">
+                                Paid
+                              </Badge>
+                            ) : bill.paymentStatus === 'verifying' ? (
+                              <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 text-[9px] font-bold py-0.5 px-1.5 uppercase animate-pulse font-sans">
+                                Verifying {bill.paymentMethod === 'cash' ? 'Cash' : 'UPI'}
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-red-500/10 text-red-500 dark:text-red-400 border-red-500/20 text-[9px] font-bold py-0.5 px-1.5 uppercase font-sans">
+                                Unpaid
+                              </Badge>
+                            )}
+                          </div>
+
+                          {/* Cashier payment approval/settlement buttons */}
+                          {bill.paymentStatus !== 'paid' && (
+                            <div className="flex gap-1.5 mt-1">
+                              {bill.paymentStatus === 'verifying' ? (
+                                <button
+                                  onClick={() => handleApprovePayment(bill._id, bill.paymentMethod || 'upi_link')}
+                                  className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-750 text-white rounded-lg text-[9px] font-bold cursor-pointer transition-colors text-center uppercase tracking-wide font-sans shadow shadow-emerald-500/5"
+                                >
+                                  Approve {bill.paymentMethod === 'cash' ? 'Cash' : 'UPI'}
+                                </button>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() => handleApprovePayment(bill._id, 'cash')}
+                                    className="flex-1 py-1.5 bg-emerald-600/10 hover:bg-emerald-600/25 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-lg text-[9px] font-bold cursor-pointer transition-colors text-center uppercase tracking-wide font-sans border-none"
+                                  >
+                                    Settle Cash
+                                  </button>
+                                  <button
+                                    onClick={() => handleApprovePayment(bill._id, 'upi_link')}
+                                    className="flex-1 py-1.5 bg-blue-600/10 hover:bg-blue-600/25 border border-blue-500/20 text-blue-600 dark:text-blue-400 rounded-lg text-[9px] font-bold cursor-pointer transition-colors text-center uppercase tracking-wide font-sans border-none"
+                                  >
+                                    Settle UPI
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
 
                           {bill.pdfUrl && (
                             <button
@@ -755,7 +805,7 @@ export default function KitchenDashboard() {
                                 const win = window.open(getBackendBillUrl(bill.pdfUrl || ''), '_blank');
                                 win?.focus();
                               }}
-                              className="text-[10px] text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-bold flex items-center gap-0.5 cursor-pointer font-sans"
+                              className="text-[9px] text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-bold flex items-center gap-0.5 cursor-pointer mt-0.5 justify-end font-sans"
                             >
                               View Invoice
                             </button>
