@@ -11,6 +11,7 @@ export interface IBill extends Document {
   paymentStatus: 'pending' | 'verifying' | 'paid';
   paymentMethod?: 'upi_link' | 'cash';
   createdAt: Date;
+  updatedAt: Date;
 }
 
 const BillSchema: Schema = new Schema(

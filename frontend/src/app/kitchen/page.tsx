@@ -483,6 +483,35 @@ export default function KitchenDashboard() {
                       </div>
                     </CardHeader>
 
+                    {(() => {
+                      const matchingBill = verifyingBills.find(b => b.tableNumber === order.tableNumber);
+                      if (!matchingBill) return null;
+                      return (
+                        <div className="bg-emerald-500/10 border-y border-emerald-500/25 text-emerald-800 dark:text-emerald-400 text-xs px-4 py-3 flex items-center justify-between gap-3 font-sans">
+                          <div className="flex items-center gap-2">
+                            <Smartphone className="w-4.5 h-4.5 text-emerald-600 animate-pulse shrink-0" />
+                            <div className="space-y-0.5">
+                              <span className="block font-bold text-[10px] uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                                Payment Pending
+                              </span>
+                              <span className="block text-foreground font-black text-sm">
+                                Rs. {matchingBill.totalAmount.toFixed(2)}
+                                <span className="text-[10px] font-medium text-muted-foreground ml-1.5 capitalize">
+                                  ({matchingBill.paymentMethod === 'cash' ? 'Cash' : 'UPI'})
+                                </span>
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleApprovePayment(matchingBill.billId, matchingBill.paymentMethod || 'upi_link')}
+                            className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer transition-all shadow-md shadow-emerald-500/20 uppercase tracking-wider"
+                          >
+                            Approve
+                          </button>
+                        </div>
+                      );
+                    })()}
+
                     {/* Items List */}
                     <CardContent className="py-3 flex-1">
                       <div className="divide-y divide-border/40 text-xs">

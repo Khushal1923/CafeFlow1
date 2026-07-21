@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../../lib/axios';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '../../../components/ui/card';
-import { Loader2, TrendingUp, DollarSign, ShoppingBag, Layers, Star, Info } from 'lucide-react';
+import { Loader2, TrendingUp, DollarSign, ShoppingBag, Layers, Star, Info, Download } from 'lucide-react';
 import { 
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, 
   PieChart, Pie, Cell, BarChart, Bar, Legend 
@@ -44,6 +44,28 @@ export default function AdminDashboardPage() {
   const [orderStatuses, setOrderStatuses] = useState<OrderStatusPoint[]>([]);
   
   const [mounted, setMounted] = useState(false);
+  const [reportDate, setReportDate] = useState(() => {
+    return new Date().toISOString().split('T')[0];
+  });
+
+  const handleDownloadReport = async () => {
+    try {
+      const res = await api.get(`/analytics/daily-report?date=${reportDate}`, {
+        responseType: 'blob'
+      });
+      const blob = new Blob([res.data], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `daily_sales_report_${reportDate}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+    } catch (err) {
+      console.error('Download report error:', err);
+      alert('Failed to download sales report.');
+    }
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -99,6 +121,29 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Dashboard Top bar */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card border border-border/40 p-5 rounded-2xl shadow-sm">
+        <div>
+          <h2 className="text-xl font-serif font-black tracking-tight">Business Overview</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">Real-time cafe sales metrics and visual analytics dashboards.</p>
+        </div>
+        
+        <div className="flex items-center gap-2.5 self-stretch sm:self-auto">
+          <input
+            type="date"
+            value={reportDate}
+            onChange={(e) => setReportDate(e.target.value)}
+            className="bg-secondary border border-border/80 rounded-xl py-2 px-3 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground"
+          />
+          <button
+            onClick={handleDownloadReport}
+            className="flex items-center gap-1.5 px-4 py-2 bg-primary hover:bg-primary/95 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-md shadow-primary/10 tracking-wide"
+          >
+            <Download className="w-4 h-4" /> Download Sales Report
+          </button>
+        </div>
+      </div>
+
       {/* Overview Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
